@@ -1,0 +1,50 @@
+import asyncio
+import os
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
+from ai_agents import prompts
+# anketa = """ФИО: Соколова Юлия Андреевна
+# ИНН: 1122334455
+# Дата осмотра: 05.08.2025
+# Полных лет: 63
+# Вес: 70 кг
+# Рост: 160 см
+# Курите: Не курю
+# Выпиваете: Алкоголь не употребляю
+# Физическая активность: Низкая
+# Хронические заболевания: Остеоартрит, принимаю обезболивающие по необходимости
+# Давление(гипертония): Повышается, бывает 150/95, измеряю дома пару раз в неделю
+# Сахар: Сахар в норме, последние 3 анализа — около 5.2"""
+
+
+load_dotenv()
+
+model_gpt4o_mini = "gpt-4.1-mini-2025-04-14"
+model_gpt_4o = "gpt-4o-2024-08-06"
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+async def call_openai_with_auto_key(system_prompt, user_prompt,client, model = model_gpt4o_mini):
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    try:
+        completion = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(e)
+        return "error"
+
+
+async def get_gpt_answer(system_prompt, user_prompt):
+    answer = await call_openai_with_auto_key(system_prompt=system_prompt, user_prompt=user_prompt, client=client)
+    print(answer)
+    return answer
+
+# user_prompt = prompts.user_prompt_check_anamnez.format(anketa =anketa )
+# asyncio.run(get_gpt_answer(system_prompt= prompts.system_prompt_check_anamnez , user_prompt= user_prompt))

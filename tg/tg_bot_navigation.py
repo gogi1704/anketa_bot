@@ -1,0 +1,428 @@
+from telegram import Message
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ChatAction
+from ai_agents.open_ai_main import get_gpt_answer
+from ai_agents import prompts, ai_utils
+from db import dialogs_db
+import resources
+import json
+import asyncio
+from pathlib import Path
+import util_fins
+from tg import tg_manager_chat_handlers
+
+
+from telegram.ext import ContextTypes
+
+image_path = Path(__file__).parent.parent / "images" / "image_andrey.jpg"
+async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    await dialogs_db.delete_dialog(user_id)
+    await dialogs_db.delete_user(user_id)
+    await dialogs_db.delete_user_reply_state(user_id)
+    await dialogs_db.delete_anketa(user_id)
+
+    await update.message.reply_text("Все данные успешно очищены.")
+
+BACK_BUTTON = "⬅️ Назад"
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await dialogs_db.delete_dialog(telegram_id=update.effective_user.id)   #___________________Временно
+    user = await dialogs_db.get_user(update.effective_user.id)
+    if user is None:
+        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
+        with open(image_path, "rb") as image:
+            await context.bot.send_photo(chat_id=chat_id, photo=image, caption=resources.start_text)
+
+        context.user_data["dialog_state"] = resources.dialog_states["get_name"]
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="Что на этот раз?")
+
+async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE , is_medosomotr_in_company):
+    context.user_data['answers'] = []
+    context.user_data['position'] = 0
+    context.user_data['dialog_state'] = resources.dialog_states["anketa"]
+
+
+    if is_medosomotr_in_company.lower() in {"да", "ага", "угу", "конечно"}:
+        context.user_data['mode'] = 'anketa_osmotr'
+    else:
+        context.user_data['dialog_state'] = resources.dialog_states["new_state"]
+        await update.message.reply_text(resources.not_client_text)
+        return
+
+    await ask_question(update, context)
+
+async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pos = context.user_data['position']
+
+    if context.user_data['mode'] == 'anketa_not_osmotr':
+        text = resources.QUESTIONS_IF_NOT_OSMOTR[pos]
+    else:
+        text = resources.QUESTIONS[pos]
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{text}\n")
+
+    keyboard = [[BACK_BUTTON]] if pos > 0 else None
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True) if keyboard else ReplyKeyboardRemove()
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await asyncio.sleep(1)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=text, reply_markup=reply_markup)
+
+
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Пациент сказал:{text}\n")
+
+    manager_msg_id = await dialogs_db.get_user_reply_state(update.effective_user.id)
+    if manager_msg_id is not None:
+        print(type(manager_msg_id), manager_msg_id)
+        # Получили ответ → очищаем состояние
+        await dialogs_db.delete_user_reply_state(update.effective_user.id)
+
+        # Отправляем сообщение в группу
+        await tg_manager_chat_handlers.send_to_chat(
+            update, context,
+            message_text=f"📨 Пользователь:\n\n{update.message.text}\n\n\n#Диалог_с_{update.effective_user.id}"
+        )
+
+        await update.message.reply_text("✅ Ваш ответ отправлен менеджеру.")
+        return
+
+    if context.user_data.get("dialog_state")== resources.dialog_states["anketa"]:
+        await anketa_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['get_name']:
+        await name_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['medosmotr_in_company']:
+        await medosmotr_in_company_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['is_has_complaint']:
+        await is_has_complaint_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['terapevt_consult']:
+        await terapevt_consult_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['change_anketa']:
+        await change_anketa_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['is_ready_to_consult']:
+        await is_ready_to_consult_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['get_number']:
+        await get_number_dialog(update, context)
+
+    elif context.user_data.get("dialog_state") == resources.dialog_states['new_state']:
+        await update.message.reply_text("new_state")
+
+    else:
+        print("handle_text_message - else")
+
+
+
+
+async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    text = update.message.text
+    user_id = update.effective_user.id
+    name = util_fins.normalize_name(text)
+
+
+    await dialogs_db.add_user(user_id=user_id, name=name)
+    context.user_data['dialog_state'] = resources.dialog_states['medosmotr_in_company']
+    answer = resources.second_text.format(user_name=name, user_id=user_id)
+
+    doc_say = answer + "\n" + resources.medosmotr_text
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id,
+                                   text=f"Терапевт сказал:{doc_say}\n")
+
+    msg = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=answer
+    )
+    await context.bot.pin_chat_message(
+        chat_id=msg.chat.id,
+        message_id=msg.message_id
+    )
+
+    await asyncio.sleep(1)
+    await update.message.reply_text(resources.medosmotr_text)
+
+async def medosmotr_in_company_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    is_medosomotr_in_company = update.message.text
+    user_id = update.effective_user.id
+
+    user_data = await dialogs_db.get_user(user_id= user_id)
+    await dialogs_db.add_user(user_id = user_id,
+                              name = user_data['name'],
+                              is_medosomotr= is_medosomotr_in_company.lower(),
+                              phone= user_data['phone'],
+                              register_date= user_data['register_date']
+                              )
+    await start_anketa(update, context, is_medosomotr_in_company)
+
+async def anketa_dialog(update, context):
+    text = update.message.text
+    user_id = update.effective_user.id
+
+    if context.user_data.get("mode") == "anketa_osmotr":
+        questions = resources.QUESTIONS
+        questions_small = resources.QUESTIONS_SMALL
+    else:
+        questions = resources.QUESTIONS_IF_NOT_OSMOTR
+        questions_small = resources.QUESTIONS_SMALL_IF_NOT_OSMOTR
+
+    pos = context.user_data['position']
+    if text == BACK_BUTTON:
+        if pos > 0:
+            context.user_data['position'] -= 1
+            context.user_data['answers'].pop()
+        await ask_question(update, context)
+        return
+
+    context.user_data['answers'].append(text)
+    context.user_data['position'] += 1
+
+    if context.user_data['position'] < len(questions):
+        await ask_question(update, context)
+        return
+    else:
+        # Завершение анкеты
+        await add_to_anketa(update, context)
+        context.user_data['mode'] = None
+        answers = context.user_data['answers']
+        summary = "\n".join(
+            f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, answers))
+        )
+
+        wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
+
+        try:
+            # 2. Здесь бот "думает"
+            user_prompt = prompts.user_prompt_check_anamnez.format(anketa=summary)
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+            recs = await get_gpt_answer(system_prompt=prompts.system_prompt_check_anamnez, user_prompt=user_prompt)
+            filtered_recs = ai_utils.filter_by_threat_level(json.loads(recs) if isinstance(recs, str) else recs)
+            print(f"Отфильтровано -   {filtered_recs}")
+
+            if len(filtered_recs) == 0:
+                await dialogs_db.append_answer(telegram_id=user_id,
+                                               text=f"Терапевт сказал:{resources.is_has_complaint_text}")
+                context.user_data['dialog_state'] = resources.dialog_states['is_has_complaint']
+                await update.message.reply_text(resources.is_has_complaint_text, reply_markup=ReplyKeyboardRemove())
+            else:
+                context.user_data['dialog_state'] = resources.dialog_states['terapevt_consult']
+                context.user_data['user_problem'] = str(filtered_recs)
+                await terapevt_consult_dialog(update, context)
+            return
+
+        finally:
+            # 4. Удаляем сообщение с часами (в любом случае)
+            try:
+                await wait_msg.delete()
+            except Exception as e:
+                print(f"⚠️ Не удалось удалить сообщение: {e}")
+
+
+
+async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = "empty"
+    user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
+    user_prompt = prompts.user_prompt_is_has_complaint.format(dialog = user_dialog )
+
+    complaint_json = await get_gpt_answer(system_prompt= prompts.system_prompt_is_has_complaint, user_prompt= user_prompt)
+    terapevt_state, complaints = ai_utils.parse_complaint_response(complaint_json)
+    print(complaints)
+
+    if terapevt_state == "complaint_empty":
+            context.user_data['dialog_state'] = resources.dialog_states['change_anketa']
+            anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id,)
+            text = resources.get_anketa_formatted(anketa)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+            text = resources.change_anketa_text
+
+
+    elif terapevt_state == "complaint_true":
+            context.user_data['dialog_state'] = resources.dialog_states['terapevt_consult']
+            # тут добавление жалоб в бд
+            context.user_data['user_problem'] = str(complaints)
+            await terapevt_consult_dialog(update, context)
+
+    elif terapevt_state is None:
+        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{complaint_json}\n")
+        text = complaint_json
+
+    if text != "empty":
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+
+async def terapevt_consult_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    user_problem = context.user_data['user_problem']
+    dialog = await dialogs_db.get_dialog(update.effective_user.id)
+    user_prompt_terapevt_stop = prompts.user_prompt_stop_terapevt.format(user_problem =user_problem ,dialog = dialog)
+    is_stop_terapevt = await get_gpt_answer(system_prompt= prompts.system_prompt_stop_terapevt, user_prompt= user_prompt_terapevt_stop)
+
+    if is_stop_terapevt == "terapevt_complete":
+        context.user_data['dialog_state'] = resources.dialog_states['is_ready_to_consult']
+        user_prompt_get_recs = prompts.user_prompt_get_rec.format(dialog = dialog)
+        recs = await get_gpt_answer(system_prompt=prompts.system_prompt_get_rec, user_prompt= user_prompt_get_recs)
+        anketa = await dialogs_db.get_anketa(update.effective_user.id)
+
+        await update.message.reply_text(resources.get_anketa_formatted(anketa))
+        await asyncio.sleep(2)
+        await update.message.reply_text(recs)
+        await asyncio.sleep(2)
+        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Менеджер сказал:{resources.anketa_result_to_doc_text}")
+
+        text = resources.anketa_result_to_doc_text
+
+
+    elif is_stop_terapevt == "terapevt_uncomplete":
+        user_prompt_terapevt_consult = prompts.user_prompt_terapevt_consult.format(user_problem=user_problem,
+                                                                                   dialog=dialog)
+        terapevt_say = await get_gpt_answer(system_prompt=prompts.system_prompt_terapevt_consult,
+                                            user_prompt=user_prompt_terapevt_consult)
+
+        text = terapevt_say
+        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{terapevt_say}")
+
+    else:
+        text = "error, try again"
+
+    await update.message.reply_text(text,reply_markup=ReplyKeyboardRemove())
+
+async def change_anketa_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    dialog = await dialogs_db.get_dialog(update.effective_user.id)
+    anketa = await dialogs_db.get_anketa(update.effective_user.id)
+
+    user_prompt_change_anketa = prompts.user_prompt_change_anketa.format(dialog = dialog, anketa = anketa)
+    terapevt_say = await get_gpt_answer(system_prompt= prompts.system_prompt_change_anketa,user_prompt= user_prompt_change_anketa)
+
+    if terapevt_say == "not_change":
+        context.user_data['dialog_state'] = resources.dialog_states['new_state']
+        terapevt_say = "Отправляю анкету в организацию, которая будет проводить медицинский осмотр.\n Тут будет еще что то"
+
+    elif terapevt_say == "change_complete":
+        user_prompt_fix = prompts.user_prompt_fix_anketa.format(dialog = dialog)
+        fix_json = await get_gpt_answer(system_prompt= prompts.system_prompt_fix_anketa, user_prompt= user_prompt_fix)
+        fix_data = json.loads(fix_json) if isinstance(fix_json, str) else fix_json
+
+        new_anketa = await dialogs_db.update_anketa_fields(update.effective_user.id, dict(fix_data))
+
+        text = resources.get_anketa_formatted(new_anketa)
+        await dialogs_db.delete_dialog(update.effective_user.id)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+
+        terapevt_say = resources.change_anketa_text
+
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{terapevt_say}")
+    await update.message.reply_text(terapevt_say)
+
+async def is_ready_to_consult_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
+
+    user_prompt_is_ready = prompts.user_prompt_is_ready_to_consult.format(dialog = user_dialog)
+    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_is_ready_to_consult, user_prompt= user_prompt_is_ready)
+
+    if manager_say == "user_true":
+        await send_privacy_policy_message(update, context)
+        return
+    elif manager_say == "user_false":
+        context.user_data['dialog_state'] = resources.dialog_states['new_state']
+        manager_say = "Спасибо за ответы. До всртечи на мед осмотре. Если что я тут."
+
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Менеджер сказал:{manager_say}")
+    await update.message.reply_text(manager_say)
+
+async def get_number_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
+
+    user_prompt_get_number = prompts.user_prompt_get_number.format(dialog = user_dialog)
+    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_get_number, user_prompt= user_prompt_get_number)
+
+    if "get_number_false" in manager_say:
+        context.user_data['dialog_state'] = resources.dialog_states['new_state']
+        manager_say = "В таком случае онлайн встреча с терапевтом не состоится. До встречи на мед осмотре. Если что я тут"
+
+    elif manager_say.startswith("user_num:"):
+        context.user_data['dialog_state'] = resources.dialog_states['new_state']
+
+        user_data = await dialogs_db.get_user(update.effective_user.id)
+        parts = manager_say.split("user_num:")
+        number = "error"
+        if len(parts) > 1:
+            number = parts[1].strip()
+            print(number)
+
+        await dialogs_db.add_user(user_id=update.effective_user.id,
+                                  name=user_data['name'],
+                                  is_medosomotr=user_data['is_medosomotr'],
+                                  phone= number,
+                                  register_date=user_data['register_date']
+                                  )
+        anketa = await dialogs_db.get_anketa(update.effective_user.id)
+        # тут достаем жалоб из бд
+        complaints = ai_utils.format_medical_risk_from_any(text = context.user_data['user_problem'])
+        text_to_manager = f"Пользователь: {user_data['name']}({number}).\n{resources.get_anketa_formatted(anketa)}\n\nЖалобы:\n{complaints}\n\n\n#Диалог_с_{update.effective_user.id} "
+        await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
+        manager_say = resources.get_number_complete_text
+
+    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Менеджер сказал:{manager_say}")
+    await update.message.reply_text(manager_say)
+    #Отправка в чат с менеджером тут
+
+
+
+async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
+    answers = context.user_data['answers']
+    if context.user_data.get("mode") == "anketa_osmotr":
+        await dialogs_db.add_or_update_anketa(user_id=update.effective_user.id,
+                                              organization_or_inn=answers[0],
+                                              osmotr_date= answers[1],
+                                              age= answers[2],
+                                              weight= answers[3],
+                                              height= answers[4],
+                                              smoking= answers[5],
+                                              alcohol= answers[6],
+                                              physical_activity= answers[7],
+                                              davlenie= answers[8],
+                                              hypertension= answers[9],
+                                              sugar= answers[10],
+                                              chronic_diseases= answers[11])
+    else:
+        await dialogs_db.add_or_update_anketa(user_id=update.effective_user.id,
+                                              organization_or_inn=answers[0],
+                                              age= answers[1],
+                                              weight= answers[2],
+                                              height= answers[3],
+                                              smoking= answers[4],
+                                              alcohol= answers[5],
+                                              physical_activity= answers[6],
+                                              davlenie= answers[7],
+                                              hypertension= answers[8],
+                                              sugar= answers[9],
+                                              chronic_diseases= answers[10])
+
+async def send_privacy_policy_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Согласен с обработкой данных", callback_data="consent_yes"),
+            InlineKeyboardButton("❌ Отказаться", callback_data="consent_no"),
+        ],
+        [
+            InlineKeyboardButton("📖 Подробнее", url=resources.privacy_policy_url)
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(resources.privacy_text, reply_markup=reply_markup, parse_mode="HTML")
+
+
+
+
