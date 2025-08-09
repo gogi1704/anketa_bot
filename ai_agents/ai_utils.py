@@ -44,6 +44,6 @@ def format_medical_risk_from_any(text: str) -> str:
         return "❌ Ошибка: структура вложенных данных неверна."
 
     description = value.get("description", "—")
-    comment = value.get("comment", "—")
+    # comment = value.get("comment", "—")
 
-    return f"Описание: {description}\nКомментарий: {comment}"
+    return f"\nОписание: {description}"

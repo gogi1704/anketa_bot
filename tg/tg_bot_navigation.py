@@ -10,8 +10,7 @@ import asyncio
 from pathlib import Path
 import util_fins
 from tg import tg_manager_chat_handlers
-
-
+from tg import tg_bot_telegraph
 from telegram.ext import ContextTypes
 
 image_path = Path(__file__).parent.parent / "images" / "image_andrey.jpg"
@@ -23,6 +22,19 @@ async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await dialogs_db.delete_anketa(user_id)
 
     await update.message.reply_text("Все данные успешно очищены.")
+
+async def stop_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_data = await dialogs_db.get_user(user_id)
+    await dialogs_db.add_user(user_id=update.effective_user.id,
+                              name=user_data['name'],
+                              is_medosomotr=user_data['is_medosomotr'],
+                              phone="empty",
+                              register_date=user_data['register_date'],
+                              privacy_policy="отказ",
+                              privacy_policy_date=None,
+                              )
+    await update.message.reply_text("Разрешения отозваны.")
 
 BACK_BUTTON = "⬅️ Назад"
 
@@ -160,7 +172,9 @@ async def medosmotr_in_company_dialog(update: Update, context: ContextTypes.DEFA
                               name = user_data['name'],
                               is_medosomotr= is_medosomotr_in_company.lower(),
                               phone= user_data['phone'],
-                              register_date= user_data['register_date']
+                              register_date= user_data['register_date'],
+                              privacy_policy=user_data['privacy_policy'],
+                              privacy_policy_date=user_data['privacy_policy_date']
                               )
     await start_anketa(update, context, is_medosomotr_in_company)
 
@@ -225,7 +239,6 @@ async def anketa_dialog(update, context):
                 await wait_msg.delete()
             except Exception as e:
                 print(f"⚠️ Не удалось удалить сообщение: {e}")
-
 
 
 async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -364,12 +377,14 @@ async def get_number_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                   name=user_data['name'],
                                   is_medosomotr=user_data['is_medosomotr'],
                                   phone= number,
-                                  register_date=user_data['register_date']
+                                  register_date=user_data['register_date'],
+                                  privacy_policy = user_data['privacy_policy'],
+                                  privacy_policy_date = user_data['privacy_policy_date']
                                   )
         anketa = await dialogs_db.get_anketa(update.effective_user.id)
         # тут достаем жалоб из бд
         complaints = ai_utils.format_medical_risk_from_any(text = context.user_data['user_problem'])
-        text_to_manager = f"Пользователь: {user_data['name']}({number}).\n{resources.get_anketa_formatted(anketa)}\n\nЖалобы:\n{complaints}\n\n\n#Диалог_с_{update.effective_user.id} "
+        text_to_manager = f"Пользователь: {user_data['name']}({number}).\n{resources.get_anketa_formatted(anketa)}\n\n{complaints}\n\n\n#Диалог_с_{update.effective_user.id} "
         await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
         manager_say = resources.get_number_complete_text
 
@@ -391,10 +406,9 @@ async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
                                               smoking= answers[5],
                                               alcohol= answers[6],
                                               physical_activity= answers[7],
-                                              davlenie= answers[8],
-                                              hypertension= answers[9],
-                                              sugar= answers[10],
-                                              chronic_diseases= answers[11])
+                                              hypertension= answers[8],
+                                              sugar= answers[9],
+                                              chronic_diseases= answers[10])
     else:
         await dialogs_db.add_or_update_anketa(user_id=update.effective_user.id,
                                               organization_or_inn=answers[0],
@@ -404,24 +418,25 @@ async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
                                               smoking= answers[4],
                                               alcohol= answers[5],
                                               physical_activity= answers[6],
-                                              davlenie= answers[7],
-                                              hypertension= answers[8],
-                                              sugar= answers[9],
-                                              chronic_diseases= answers[10])
+                                              hypertension= answers[7],
+                                              sugar= answers[8],
+                                              chronic_diseases= answers[9])
 
 async def send_privacy_policy_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_data = await dialogs_db.get_user(update.effective_user.id)
+    url = await tg_bot_telegraph.make_telegraph(user_data)
     keyboard = [
         [
             InlineKeyboardButton("✅ Согласен с обработкой данных", callback_data="consent_yes"),
             InlineKeyboardButton("❌ Отказаться", callback_data="consent_no"),
         ],
         [
-            InlineKeyboardButton("📖 Подробнее", url=resources.privacy_policy_url)
+            InlineKeyboardButton("📖 Подробнее", url= url)
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(resources.privacy_text, reply_markup=reply_markup, parse_mode="HTML")
+    text = resources.privacy_text.format(url = url)
+    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
 
 
 

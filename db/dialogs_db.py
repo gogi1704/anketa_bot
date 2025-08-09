@@ -19,7 +19,9 @@ async def init_db():
                     name TEXT NOT NULL,
                     is_medosomotr TEXT,
                     phone TEXT,
-                    register_date DATETIME DEFAULT CURRENT_TIMESTAMP
+                    register_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    privacy_policy TEXT,
+                    privacy_policy_date DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
@@ -34,7 +36,6 @@ async def init_db():
                     smoking TEXT,
                     alcohol TEXT,
                     physical_activity TEXT,
-                    davlenie TEXT,
                     hypertension TEXT,
                     sugar TEXT,
                     chronic_diseases TEXT,
@@ -104,18 +105,20 @@ async def delete_dialog( telegram_id: int):
 
 
 #______ USERS
-async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None, register_date = datetime.datetime.now(datetime.UTC)):
+async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None,
+                   register_date = datetime.datetime.now(datetime.UTC),
+                   privacy_policy:str = None, privacy_policy_date:datetime.datetime = None):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
-            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user_id, name, is_medosomotr, phone, register_date ))
+            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date ))
         await db.commit()
 
 async def get_user(user_id: int) -> dict | None:
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT user_id, name, is_medosomotr, phone, register_date FROM user_data WHERE user_id = ?",
+            "SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date  FROM user_data WHERE user_id = ?",
             (user_id,)
         )
         row = await cursor.fetchone()
@@ -125,7 +128,9 @@ async def get_user(user_id: int) -> dict | None:
                 "name": row[1],
                 "is_medosomotr": row[2],
                 "phone": row[3],
-                "register_date": row[4]
+                "register_date": row[4],
+                "privacy_policy":row[5],
+                "privacy_policy_date":row[6]
             }
         return None
 
@@ -136,6 +141,11 @@ async def delete_user(user_id: int):
             (user_id,)
         )
         await db.commit()
+
+async def get_all_user_ids():
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute("SELECT DISTINCT user_id FROM user_data") as cursor:
+            return [row[0] async for row in cursor]
 #______
 
 
@@ -150,7 +160,6 @@ async def add_or_update_anketa(
     smoking: str = None,
     alcohol: str = None,
     physical_activity: str = None,
-    davlenie: str = None,
     hypertension: str = None,
     sugar: str = None,
     chronic_diseases: str = None
@@ -159,10 +168,10 @@ async def add_or_update_anketa(
         await db.execute("""
             INSERT INTO user_anketa (
                 user_id, organization_or_inn, osmotr_date, age, weight, height,
-                smoking, alcohol, physical_activity, davlenie,
+                smoking, alcohol, physical_activity,
                 hypertension, sugar, chronic_diseases
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 organization_or_inn = excluded.organization_or_inn,
                 osmotr_date = excluded.osmotr_date,
@@ -172,13 +181,12 @@ async def add_or_update_anketa(
                 smoking = excluded.smoking,
                 alcohol = excluded.alcohol,
                 physical_activity = excluded.physical_activity,
-                davlenie = excluded.davlenie,
                 hypertension = excluded.hypertension,
                 sugar = excluded.sugar,
                 chronic_diseases = excluded.chronic_diseases
         """, (
             user_id, organization_or_inn, osmotr_date, age, weight, height,
-            smoking, alcohol, physical_activity, davlenie,
+            smoking, alcohol, physical_activity,
             hypertension, sugar, chronic_diseases
         ))
         await db.commit()
@@ -198,7 +206,7 @@ async def update_anketa_fields(user_id: int, change_json: dict) -> dict | None:
 
         columns = [
             "user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height",
-            "smoking", "alcohol", "physical_activity", "davlenie",
+            "smoking", "alcohol", "physical_activity",
             "hypertension", "sugar", "chronic_diseases"
         ]
         anketa_dict = dict(zip(columns, row))
@@ -238,7 +246,7 @@ async def get_anketa(user_id: int) -> dict | None:
         if row:
             columns = [
                 "user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height",
-                "smoking", "alcohol", "physical_activity", "davlenie",
+                "smoking", "alcohol", "physical_activity",
                 "hypertension", "sugar", "chronic_diseases"
             ]
             return dict(zip(columns, row))

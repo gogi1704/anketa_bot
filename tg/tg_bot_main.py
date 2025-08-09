@@ -1,9 +1,8 @@
 import os
 from dotenv import load_dotenv
-
-import resources
 from tg.tg_bot_navigation import *
 from tg.tg_manager_chat_handlers import *
+from tg.tg_bot_channel_funs import *
 from db import dialogs_db
 import nest_asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -15,9 +14,8 @@ TOKEN = os.environ.get("TG_TOKEN")
 
 async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user_data = await dialogs_db.get_user(user_id=update.effective_user.id)
     await query.answer()
-
-    # Удалить старое сообщение с кнопками (опционально)
     try:
         await context.bot.delete_message(
             chat_id=query.message.chat.id,
@@ -28,14 +26,31 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     if query.data == "consent_yes":
         context.user_data['dialog_state'] = resources.dialog_states['get_number']
+        await dialogs_db.add_user(user_id=update.effective_user.id,
+                                  name=user_data['name'],
+                                  is_medosomotr=user_data['is_medosomotr'],
+                                  phone= user_data["phone"],
+                                  register_date=user_data['register_date'],
+                                  privacy_policy = "согласие",
+                                  privacy_policy_date = datetime.datetime.now(datetime.UTC),
+                                  )
         # Записать в диалог
         await dialogs_db.append_answer(telegram_id=update.effective_user.id,text=f"Менеджер сказал: {resources.get_number_text}")
         # Отправить новое сообщение в чат с выбором пользователя
         await context.bot.send_message(chat_id=update.effective_user.id, text= resources.privacy_policy_true)
+
         await context.bot.send_message(chat_id=update.effective_user.id,text=resources.get_number_text)
 
     elif query.data == "consent_no":
         context.user_data['dialog_state'] = resources.dialog_states['new_state']
+        await dialogs_db.add_user(user_id=update.effective_user.id,
+                                  name=user_data['name'],
+                                  is_medosomotr=user_data['is_medosomotr'],
+                                  phone= user_data["phone"],
+                                  register_date=user_data['register_date'],
+                                  privacy_policy = "отказ",
+                                  privacy_policy_date = datetime.datetime.now(datetime.UTC),
+                                  )
 
         await context.bot.send_message(chat_id=update.effective_user.id,text=resources.privacy_policy_false)
 
@@ -49,13 +64,16 @@ async def main():
     await application.bot.set_my_commands([
         BotCommand("start", "Пуск"),
         BotCommand("clear_all", "Очистить все данные"),
+        BotCommand("stop_privacy", "Отмена обработки персональных данных"),
     ], scope=BotCommandScopeDefault())
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler("clear_all", clear_all))
+    application.add_handler(CommandHandler("stop_privacy", stop_privacy))
     application.add_handler(CallbackQueryHandler(consent_button_handler, pattern="^consent_"))
 
 
+    # application.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
 
     application.add_handler(CallbackQueryHandler(handle_reply_button_pressed, pattern=r"^reply_to_manager\|"))
     application.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.TEXT, handle_manager_reply))

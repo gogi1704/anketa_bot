@@ -12,4 +12,11 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Указываем команду запуска бота
-CMD ["python", "-m", "tg.tgbot_main"]
+CMD ["python", "-m", "tg.tg_bot_main"]
+
+# запускаем так
+#docker run -d \
+#--name anketa_container \
+#-e PYTHONPATH=/app \
+#anketa_bot_image \
+#python -m tg.tg_bot_main
