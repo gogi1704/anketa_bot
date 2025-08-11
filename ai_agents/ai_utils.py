@@ -37,8 +37,8 @@ def format_medical_risk_from_any(text: str) -> str:
             return "❌ Ошибка: не удалось распарсить строку как JSON или dict."
 
     if not isinstance(data, dict) or not data:
-        return "❌ Ошибка: данные не являются словарём."
-
+        # return "❌ Ошибка: данные не являются словарём."
+        return data
     _, value = next(iter(data.items()))
     if not isinstance(value, dict):
         return "❌ Ошибка: структура вложенных данных неверна."

@@ -63,7 +63,18 @@ def get_anketa_formatted(anketa: dict):
                                                      chronic_diseases= anketa["chronic_diseases"]
                                                      )
 
-dialog_states = {"get_name":"state_get_name",
+# dialog_states = {"get_name":"state_get_name",
+#     "medosmotr_in_company":"state_medosmotr_in_company",
+#     "anketa":"state_anketa",
+#     "is_has_complaint":"state_is_has_complaint",
+#     "terapevt_consult":"state_terapevt_consult",
+#     "change_anketa":"state_change_anketa",
+#     "is_ready_to_consult":"state_is_ready_to_consult",
+#     "get_number":"state_get_number",
+#     "new_state":"state_new_state",
+#                  }
+
+dialog_states_dict = {"get_name":"state_get_name",
     "medosmotr_in_company":"state_medosmotr_in_company",
     "anketa":"state_anketa",
     "is_has_complaint":"state_is_has_complaint",

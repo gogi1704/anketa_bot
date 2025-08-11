@@ -25,7 +25,8 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
         print("Ошибка при удалении сообщения:", e)
 
     if query.data == "consent_yes":
-        context.user_data['dialog_state'] = resources.dialog_states['get_number']
+        await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_number"])
+
         await dialogs_db.add_user(user_id=update.effective_user.id,
                                   name=user_data['name'],
                                   is_medosomotr=user_data['is_medosomotr'],
@@ -42,7 +43,7 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_message(chat_id=update.effective_user.id,text=resources.get_number_text)
 
     elif query.data == "consent_no":
-        context.user_data['dialog_state'] = resources.dialog_states['new_state']
+        await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["new_state"])
         await dialogs_db.add_user(user_id=update.effective_user.id,
                                   name=user_data['name'],
                                   is_medosomotr=user_data['is_medosomotr'],

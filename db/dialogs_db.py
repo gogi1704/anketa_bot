@@ -57,6 +57,13 @@ async def init_db():
                         )
                     """)
 
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS dialog_states (
+                    user_id INTEGER PRIMARY KEY,
+                    dialog_state TEXT NOT NULL
+                )
+            """)
+
             await db.commit()
 
 #______ DIALOGS
@@ -258,6 +265,35 @@ async def delete_anketa(user_id: int):
             "DELETE FROM user_anketa WHERE user_id = ?",
             (user_id,)
         )
+        await db.commit()
+
+#______
+
+#STATE
+async def set_dialog_state(user_id: int, state: str):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("""
+            INSERT INTO dialog_states (user_id, dialog_state)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET dialog_state=excluded.dialog_state
+        """, (user_id, state))
+        await db.commit()
+
+
+async def get_dialog_state(user_id: int) -> str | None:
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute("""
+            SELECT dialog_state FROM dialog_states WHERE user_id = ?
+        """, (user_id,)) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+
+async def delete_dialog_state(user_id: int):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("""
+            DELETE FROM dialog_states WHERE user_id = ?
+        """, (user_id,))
         await db.commit()
 
 #______
