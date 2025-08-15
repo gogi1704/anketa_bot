@@ -1,7 +1,12 @@
 import aiosqlite
 import datetime
+import asyncio
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import os
 db_path='dialogs.db'
-
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # на уровень выше папки db
+CREDS_PATH = os.path.join(BASE_DIR, "docs", "anamnez-bot-fd6467c32f62.json")
 
 async def init_db():
         async with aiosqlite.connect(db_path) as db:
@@ -65,6 +70,157 @@ async def init_db():
             """)
 
             await db.commit()
+        await sync_from_google_sheets()
+
+
+# ==== Настройки Google API ====
+SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SPREADSHEET_NAME = "anamnez_db"  # Имя файла в Google Sheets
+
+
+# ==== Подключение к Google Sheets ====
+def get_sheet():
+    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_PATH, SCOPE)
+    client = gspread.authorize(creds)
+    sheet = client.open(SPREADSHEET_NAME)
+    return {
+        "patient_dialogs": sheet.worksheet("patient_dialogs"),
+        "user_data": sheet.worksheet("user_data"),
+        "user_anketa": sheet.worksheet("user_anketa"),
+        "message_links": sheet.worksheet("message_links"),
+        "user_reply_state": sheet.worksheet("user_reply_state"),
+        "dialog_states": sheet.worksheet("dialog_states"),
+    }
+
+# ==== Загрузка данных из Google Sheets в SQLite ====
+async def sync_from_google_sheets():
+    sheets = get_sheet()
+    async with aiosqlite.connect(db_path) as db:
+        # Очистка таблиц
+        await db.execute("DELETE FROM patient_dialogs")
+        await db.execute("DELETE FROM user_data")
+        await db.execute("DELETE FROM user_anketa")
+        await db.execute("DELETE FROM message_links")
+        await db.execute("DELETE FROM user_reply_state")
+        await db.execute("DELETE FROM dialog_states")
+
+        # patient_dialogs
+        rows = sheets["patient_dialogs"].get_all_values()[1:]
+        for r in rows:
+            telegram_id, dialog_text, updated_at = r
+            await db.execute(
+                "INSERT INTO patient_dialogs (telegram_id, dialog_text, updated_at) VALUES (?, ?, ?)",
+                (int(telegram_id), dialog_text, updated_at)
+            )
+
+        # user_data
+        rows = sheets["user_data"].get_all_values()[1:]
+        for r in rows:
+            user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date = r
+            await db.execute(
+                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (int(user_id), name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date)
+            )
+
+        # user_anketa
+        rows = sheets["user_anketa"].get_all_values()[1:]
+        for r in rows:
+            user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases = r
+            await db.execute(
+                """INSERT INTO user_anketa (
+                    user_id, organization_or_inn, osmotr_date, age, weight, height,
+                    smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (int(user_id), organization_or_inn, osmotr_date,
+                 int(age) if age else None,
+                 float(weight) if weight else None,
+                 float(height) if height else None,
+                 smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases)
+            )
+
+        # message_links
+        rows = sheets["message_links"].get_all_values()[1:]
+        for r in rows:
+            group_message_id, user_id = r
+            await db.execute(
+                "INSERT INTO message_links (group_message_id, user_id) VALUES (?, ?)",
+                (int(group_message_id), int(user_id))
+            )
+
+        # user_reply_state
+        rows = sheets["user_reply_state"].get_all_values()[1:]
+        for r in rows:
+            user_id, manager_message_id = r
+            await db.execute(
+                "INSERT INTO user_reply_state (user_id, manager_message_id) VALUES (?, ?)",
+                (int(user_id), int(manager_message_id) if manager_message_id else None)
+            )
+
+        # dialog_states
+        rows = sheets["dialog_states"].get_all_values()[1:]
+        for r in rows:
+            user_id, dialog_state = r
+            await db.execute(
+                "INSERT INTO dialog_states (user_id, dialog_state) VALUES (?, ?)",
+                (int(user_id), dialog_state)
+            )
+
+        await db.commit()
+        print("[✅] Данные из Google Sheets загружены в SQLite")
+
+# ==== Выгрузка данных из SQLite в Google Sheets ====
+async def sync_to_google_sheets():
+    sheets = get_sheet()
+    async with aiosqlite.connect(db_path) as db:
+
+        # patient_dialogs
+        async with db.execute("SELECT telegram_id, dialog_text, updated_at FROM patient_dialogs") as cur:
+            rows = await cur.fetchall()
+        sheets["patient_dialogs"].clear()
+        sheets["patient_dialogs"].update("A1", [["telegram_id", "dialog_text", "updated_at"]] + rows)
+
+        # user_data
+        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date FROM user_data") as cur:
+            rows = await cur.fetchall()
+        sheets["user_data"].clear()
+        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date"]] + rows)
+
+        # user_anketa
+        async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases FROM user_anketa""") as cur:
+            rows = await cur.fetchall()
+        sheets["user_anketa"].clear()
+        sheets["user_anketa"].update("A1", [["user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height", "smoking", "alcohol", "physical_activity", "hypertension", "sugar", "chronic_diseases"]] + rows)
+
+        # message_links
+        async with db.execute("SELECT group_message_id, user_id FROM message_links") as cur:
+            rows = await cur.fetchall()
+        sheets["message_links"].clear()
+        sheets["message_links"].update("A1", [["group_message_id", "user_id"]] + rows)
+
+        # user_reply_state
+        async with db.execute("SELECT user_id, manager_message_id FROM user_reply_state") as cur:
+            rows = await cur.fetchall()
+        sheets["user_reply_state"].clear()
+        sheets["user_reply_state"].update("A1", [["user_id", "manager_message_id"]] + rows)
+
+        # dialog_states
+        async with db.execute("SELECT user_id, dialog_state FROM dialog_states") as cur:
+            rows = await cur.fetchall()
+        sheets["dialog_states"].clear()
+        sheets["dialog_states"].update("A1", [["user_id", "dialog_state"]] + rows)
+
+        print("[✅] Данные из SQLite выгружены в Google Sheets")
+
+# ==== Периодическая синхронизация ====
+async def periodic_sync(interval: int = 7200):
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await sync_to_google_sheets()
+            print(f"Успешная синхронизация.")
+        except Exception as e:
+            print(f"Ошибка при синхронизации в Google Sheets: {e}")
+
 
 #______ DIALOGS
 async def append_answer(telegram_id: int, text: str):

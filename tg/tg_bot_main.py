@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from tg.tg_bot_navigation import *
 from tg.tg_manager_chat_handlers import *
 from tg.tg_bot_channel_funs import *
+from tg.tg_error_handlers import error_handler
 from db import dialogs_db
 import nest_asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -59,6 +60,7 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def main():
     await dialogs_db.init_db()
+    asyncio.create_task(periodic_sync())
 
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
     print('Бот запущен...')
@@ -67,6 +69,8 @@ async def main():
         BotCommand("clear_all", "Очистить все данные"),
         BotCommand("stop_privacy", "Отмена обработки персональных данных"),
     ], scope=BotCommandScopeDefault())
+
+    application.add_error_handler(error_handler)
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler("clear_all", clear_all))
@@ -85,6 +89,9 @@ async def main():
     print('Бот остановлен')
 
 if __name__ == "__main__":
-    nest_asyncio.apply()
     import asyncio
+
+
+    nest_asyncio.apply()
     asyncio.run(main())
+
