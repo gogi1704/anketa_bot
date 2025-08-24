@@ -353,7 +353,7 @@ async def is_ready_to_consult_dialog(update: Update, context: ContextTypes.DEFAU
     elif manager_say == "user_false":
         await dialogs_db.set_dialog_state(update.effective_user.id,
                                           resources.dialog_states_dict["new_state"])
-        manager_say = "Спасибо за ответы. До всртечи на мед осмотре. Если что я тут."
+        manager_say = "Спасибо за ответы. До встречи на мед осмотре. Если что - я тут👋🏻"
 
     await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Менеджер сказал:{manager_say}")
     await update.message.reply_text(manager_say)
@@ -438,9 +438,9 @@ async def send_privacy_policy_message(update: Update, context: ContextTypes.DEFA
             InlineKeyboardButton("✅ Согласен с обработкой данных", callback_data="consent_yes"),
             InlineKeyboardButton("❌ Отказаться", callback_data="consent_no"),
         ],
-        [
-            InlineKeyboardButton("📖 Подробнее", url= url)
-        ]
+        # [
+        #     InlineKeyboardButton("📖 Подробнее", url= url)
+        # ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = resources.privacy_text.format(url = url)
