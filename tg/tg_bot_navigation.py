@@ -42,7 +42,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = await dialogs_db.get_user(update.effective_user.id)
     if user is None:
-        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
+        # await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
         with open(image_path, "rb") as image:
             await context.bot.send_photo(chat_id=chat_id, photo=image, caption=resources.start_text)
 
@@ -72,7 +72,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = resources.QUESTIONS_IF_NOT_OSMOTR[pos]
     else:
         text = resources.QUESTIONS[pos]
-    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{text}\n")
+    # await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{text}\n")
 
     keyboard = [[BACK_BUTTON]] if pos > 0 else None
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True) if keyboard else ReplyKeyboardRemove()
@@ -84,11 +84,11 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Пациент сказал:{text}\n")
     state = await dialogs_db.get_dialog_state(update.effective_user.id)
 
     manager_msg_id = await dialogs_db.get_user_reply_state(update.effective_user.id)
     if manager_msg_id is not None:
+        await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Пациент сказал:{text}\n")
         print(type(manager_msg_id), manager_msg_id)
         # Получили ответ → очищаем состояние
         await dialogs_db.delete_user_reply_state(update.effective_user.id)
@@ -111,23 +111,23 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif state == resources.dialog_states_dict['medosmotr_in_company']:
         await medosmotr_in_company_dialog(update, context)
 
-    elif state == resources.dialog_states_dict['is_has_complaint']:
-        await is_has_complaint_dialog(update, context)
-
-    elif state == resources.dialog_states_dict['terapevt_consult']:
-        await terapevt_consult_dialog(update, context)
-
-    elif state == resources.dialog_states_dict['change_anketa']:
-        await change_anketa_dialog(update, context)
-
-    elif state == resources.dialog_states_dict['is_ready_to_consult']:
-        await is_ready_to_consult_dialog(update, context)
-
-    elif state == resources.dialog_states_dict['get_number']:
-        await get_number_dialog(update, context)
+    # elif state == resources.dialog_states_dict['is_has_complaint']:
+    #     await is_has_complaint_dialog(update, context)
+    #
+    # elif state == resources.dialog_states_dict['terapevt_consult']:
+    #     await terapevt_consult_dialog(update, context)
+    #
+    # elif state == resources.dialog_states_dict['change_anketa']:
+    #     await change_anketa_dialog(update, context)
+    #
+    # elif state == resources.dialog_states_dict['is_ready_to_consult']:
+    #     await is_ready_to_consult_dialog(update, context)
+    #
+    # elif state == resources.dialog_states_dict['get_number']:
+    #     await get_number_dialog(update, context)
 
     elif state == resources.dialog_states_dict['new_state']:
-        await update.message.reply_text("new_state")
+        await update.message.reply_text("Спасибо за ответы. До встречи на осмотре!")
 
     else:
         print("handle_text_message - else")
@@ -147,8 +147,7 @@ async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = resources.second_text.format(user_name=name, user_id=user_id)
 
     doc_say = answer + "\n" + resources.medosmotr_text
-    await dialogs_db.append_answer(telegram_id=update.effective_user.id,
-                                   text=f"Терапевт сказал:{doc_say}\n")
+    # await dialogs_db.append_answer(telegram_id=update.effective_user.id,text=f"Терапевт сказал:{doc_say}\n")
 
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -207,39 +206,169 @@ async def anketa_dialog(update, context):
         # Завершение анкеты
         await add_to_anketa(update, context)
         context.user_data['mode'] = None
-        answers = context.user_data['answers']
-        summary = "\n".join(
-            f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, answers))
+        # answers = context.user_data['answers']
+        # summary = "\n".join(
+        #     f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, answers))
+        # )
+
+        # wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
+
+        # try:
+        #     user_prompt = prompts.user_prompt_check_anamnez.format(anketa=summary)
+        #     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+        #     recs = await get_gpt_answer(system_prompt=prompts.system_prompt_check_anamnez, user_prompt=user_prompt)
+        #     filtered_recs = ai_utils.filter_by_threat_level(json.loads(recs) if isinstance(recs, str) else recs)
+        #     print(f"Отфильтровано -   {filtered_recs}")
+        #
+        #     if len(filtered_recs) == 0:
+        #         await dialogs_db.append_answer(telegram_id=user_id,
+        #                                        text=f"Терапевт сказал:{resources.is_has_complaint_text}")
+        #         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["is_has_complaint"])
+        #         await update.message.reply_text(resources.is_has_complaint_text, reply_markup=ReplyKeyboardRemove())
+        #     else:
+        #         await dialogs_db.set_dialog_state(update.effective_user.id,
+        #                                           resources.dialog_states_dict["terapevt_consult"])
+        #         context.user_data['user_problem'] = str(filtered_recs)
+        #         await terapevt_consult_dialog(update, context)
+        #     return
+        #
+        # finally:
+        #     # 4. Удаляем сообщение с часами (в любом случае)
+        #     try:
+        #         await wait_msg.delete()
+        #     except Exception as e:
+        #         print(f"⚠️ Не удалось удалить сообщение: {e}")
+        keyboard = [
+            [InlineKeyboardButton("Да", callback_data='dop_yes')],
+            [InlineKeyboardButton("Нет", callback_data='dop_no')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text("Спасибо! Ваша анкета передана менеджеру для прохождения осмотра.")
+        await asyncio.sleep(1)
+        await update.message.reply_text(resources.analizy_text)
+        await asyncio.sleep(3)
+
+        await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
+
+
+async def handle_dop_analizy(update, context):
+    query = update.callback_query
+    answer = query.data  # Получаем ответ, "yes" или "no"
+    print(answer)
+    context.user_data["dop_message_id"] = query.message.message_id
+
+    if answer == 'dop_yes':
+        await choose_tests(update, context)
+
+    elif answer == "dop_no":
+        await dialogs_db.set_dialog_state(update.effective_user.id,
+                                          resources.dialog_states_dict["new_state"])
+        anketa =  await dialogs_db.get_anketa(user_id= update.effective_user.id)
+        date = anketa["osmotr_date"]
+        await update.effective_message.reply_text(f"Спасибо за ответ! Будем ждать Вас на осмотре {date}")
+
+
+
+# --- формируем клавиатуру ---
+def get_tests_keyboard(selected_tests: set):
+    keyboard = []
+
+    for idx, test in enumerate(resources.TESTS):
+        # текст кнопки
+        text = test
+        if test in selected_tests:
+            text = f"✅ *{test}*"   # жирный + галочка
+
+        # callback_data используем короткий ID (индекс), а не весь текст
+        callback_data = f"toggle:{idx}"
+
+        # длинные названия — в отдельном ряду, короткие можно по 2
+        if len(test) > 15:
+            keyboard.append([InlineKeyboardButton(text, callback_data=callback_data)])
+        else:
+            if not keyboard or len(keyboard[-1]) == 2 or "ГОТОВО" in keyboard[-1][0].text:
+                keyboard.append([])
+            keyboard[-1].append(InlineKeyboardButton(text, callback_data=callback_data))
+
+    # кнопка "ГОТОВО" внизу
+    keyboard.append([InlineKeyboardButton("ГОТОВО", callback_data="done")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+# --- выбор тестов ---
+async def choose_tests(update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data["selected_tests"] = set()  # список выбранных сбрасываем
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=resources.choose_tests_text,
+        reply_markup=get_tests_keyboard(context.user_data["selected_tests"]),
+        parse_mode="Markdown"
+    )
+
+
+# --- обработка кликов по кнопкам ---
+async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if "selected_tests" not in context.user_data:
+        context.user_data["selected_tests"] = set()
+
+    data = query.data
+
+    if data.startswith("toggle:"):
+        idx = int(data.split(":", 1)[1])  # достаём индекс
+        test = resources.TESTS[idx]       # получаем название теста
+
+        if test in context.user_data["selected_tests"]:
+            context.user_data["selected_tests"].remove(test)
+        else:
+            context.user_data["selected_tests"].add(test)
+
+        # обновляем клавиатуру
+        await query.edit_message_reply_markup(
+            reply_markup=get_tests_keyboard(context.user_data["selected_tests"])
         )
 
-        wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
+    elif data == "done":
+        chosen = ", ".join(context.user_data["selected_tests"]) or "ничего"
+        user_data = await dialogs_db.get_user(user_id= update.effective_user.id)
+        anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
+        date = anketa["osmotr_date"]
 
-        try:
-            # 2. Здесь бот "думает"
-            user_prompt = prompts.user_prompt_check_anamnez.format(anketa=summary)
-            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-            recs = await get_gpt_answer(system_prompt=prompts.system_prompt_check_anamnez, user_prompt=user_prompt)
-            filtered_recs = ai_utils.filter_by_threat_level(json.loads(recs) if isinstance(recs, str) else recs)
-            print(f"Отфильтровано -   {filtered_recs}")
-
-            if len(filtered_recs) == 0:
-                await dialogs_db.append_answer(telegram_id=user_id,
-                                               text=f"Терапевт сказал:{resources.is_has_complaint_text}")
-                await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["is_has_complaint"])
-                await update.message.reply_text(resources.is_has_complaint_text, reply_markup=ReplyKeyboardRemove())
-            else:
-                await dialogs_db.set_dialog_state(update.effective_user.id,
-                                                  resources.dialog_states_dict["terapevt_consult"])
-                context.user_data['user_problem'] = str(filtered_recs)
-                await terapevt_consult_dialog(update, context)
-            return
-
-        finally:
-            # 4. Удаляем сообщение с часами (в любом случае)
+        await dialogs_db.add_user(user_id=update.effective_user.id,
+                                  name=user_data['name'],
+                                  is_medosomotr=user_data['is_medosomotr'],
+                                  register_date=user_data['register_date'],
+                                  privacy_policy = user_data['privacy_policy'],
+                                  privacy_policy_date = user_data['privacy_policy_date'],
+                                  get_dop_tests = chosen
+                                  )
+        if "dop_message_id" in context.user_data:
             try:
-                await wait_msg.delete()
+                await context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=context.user_data["dop_message_id"]
+                )
+                await query.message.delete()
             except Exception as e:
-                print(f"⚠️ Не удалось удалить сообщение: {e}")
+                print(f"Не удалось удалить сообщение с вопросом: {e}")
+        await dialogs_db.set_dialog_state(update.effective_user.id,
+                                          resources.dialog_states_dict["new_state"])
+
+        text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре {date}.\n\nОбследования: {chosen} "
+        await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
+
+        await query.message.reply_text(f"Спасибо! Ваш запись передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+
+
+
+
 
 
 async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):

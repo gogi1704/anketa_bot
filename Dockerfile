@@ -18,5 +18,5 @@ CMD ["python", "-m", "tg.tg_bot_main"]
 #docker run -d \
 #--name anketa_container \
 #-e PYTHONPATH=/app \
-#anketa_bot_image \
+#anketa_image \
 #python -m tg.tg_bot_main

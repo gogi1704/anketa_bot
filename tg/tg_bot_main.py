@@ -67,7 +67,6 @@ async def main():
     await application.bot.set_my_commands([
         BotCommand("start", "Пуск"),
         BotCommand("clear_all", "Очистить все данные"),
-        BotCommand("stop_privacy", "Отмена обработки персональных данных"),
     ], scope=BotCommandScopeDefault())
 
     application.add_error_handler(error_handler)
@@ -76,7 +75,8 @@ async def main():
     application.add_handler(CommandHandler("clear_all", clear_all))
     application.add_handler(CommandHandler("stop_privacy", stop_privacy))
     application.add_handler(CallbackQueryHandler(consent_button_handler, pattern="^consent_"))
-
+    application.add_handler(CallbackQueryHandler(handle_toggle, pattern="^(toggle:|done)"))
+    application.add_handler(CallbackQueryHandler(handle_dop_analizy, pattern="^dop_"))
 
     # application.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
 

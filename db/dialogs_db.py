@@ -26,7 +26,8 @@ async def init_db():
                     phone TEXT,
                     register_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     privacy_policy TEXT,
-                    privacy_policy_date DATETIME DEFAULT CURRENT_TIMESTAMP
+                    privacy_policy_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    get_dop_tests TEXT
                 )
             """)
 
@@ -270,18 +271,18 @@ async def delete_dialog( telegram_id: int):
 #______ USERS
 async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None,
                    register_date = datetime.datetime.now(datetime.UTC),
-                   privacy_policy:str = None, privacy_policy_date:datetime.datetime = None):
+                   privacy_policy:str = None, privacy_policy_date:datetime.datetime = None, get_dop_tests:str = None):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
-            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date ))
+            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests ))
         await db.commit()
 
 async def get_user(user_id: int) -> dict | None:
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date  FROM user_data WHERE user_id = ?",
+            "SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests FROM user_data WHERE user_id = ?",
             (user_id,)
         )
         row = await cursor.fetchone()
@@ -293,7 +294,8 @@ async def get_user(user_id: int) -> dict | None:
                 "phone": row[3],
                 "register_date": row[4],
                 "privacy_policy":row[5],
-                "privacy_policy_date":row[6]
+                "privacy_policy_date":row[6],
+                "get_dop_tests":row[7]
             }
         return None
 
