@@ -37,8 +37,8 @@ async def init_db():
                     organization_or_inn TEXT,
                     osmotr_date DATETIME,
                     age INTEGER,
-                    weight REAL,
-                    height REAL,
+                    weight TEXT,
+                    height TEXT,
                     smoking TEXT,
                     alcohol TEXT,
                     physical_activity TEXT,
@@ -119,7 +119,7 @@ async def sync_from_google_sheets():
         for r in rows:
             user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests = r
             await db.execute(
-                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (int(user_id), name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests)
             )
 
@@ -133,9 +133,9 @@ async def sync_from_google_sheets():
                     smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), organization_or_inn, osmotr_date,
-                 int(age) if age else None,
-                 float(weight) if weight else None,
-                 float(height) if height else None,
+                 age if age else None,
+                 weight if weight else None,
+                 height if height else None,
                  smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases)
             )
 
@@ -181,10 +181,10 @@ async def sync_to_google_sheets():
         sheets["patient_dialogs"].update("A1", [["telegram_id", "dialog_text", "updated_at"]] + rows)
 
         # user_data
-        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date FROM user_data, get_dop_tests") as cur:
+        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests FROM user_data") as cur:
             rows = await cur.fetchall()
         sheets["user_data"].clear()
-        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date, get_dop_tests"]] + rows)
+        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date", "get_dop_tests"]] + rows)
 
         # user_anketa
         async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases FROM user_anketa""") as cur:
@@ -213,7 +213,7 @@ async def sync_to_google_sheets():
         print("[✅] Данные из SQLite выгружены в Google Sheets")
 
 # ==== Периодическая синхронизация ====
-async def periodic_sync(interval: int = 7200):
+async def periodic_sync(interval: int = 120):
     while True:
         await asyncio.sleep(interval)
         try:
