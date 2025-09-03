@@ -117,10 +117,10 @@ async def sync_from_google_sheets():
         # user_data
         rows = sheets["user_data"].get_all_values()[1:]
         for r in rows:
-            user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date = r
+            user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests = r
             await db.execute(
-                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (int(user_id), name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date)
+                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (int(user_id), name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests)
             )
 
         # user_anketa
@@ -181,10 +181,10 @@ async def sync_to_google_sheets():
         sheets["patient_dialogs"].update("A1", [["telegram_id", "dialog_text", "updated_at"]] + rows)
 
         # user_data
-        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date FROM user_data") as cur:
+        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date FROM user_data, get_dop_tests") as cur:
             rows = await cur.fetchall()
         sheets["user_data"].clear()
-        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date"]] + rows)
+        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date, get_dop_tests"]] + rows)
 
         # user_anketa
         async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases FROM user_anketa""") as cur:

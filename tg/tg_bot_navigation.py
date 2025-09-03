@@ -368,9 +368,6 @@ async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-
-
-
 async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "empty"
     user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
