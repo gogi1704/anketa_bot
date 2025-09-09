@@ -41,6 +41,7 @@ BACK_BUTTON = "⬅️ Назад"
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = await dialogs_db.get_user(update.effective_user.id)
+    anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
     if user is None:
         # await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
         with open(image_path, "rb") as image:
@@ -48,30 +49,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_name"] )
     else:
-        await context.bot.send_message(chat_id=chat_id, text="Что на этот раз?")
+        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user["name"]}! Ожидаем вас на осмотре {anketa["osmotr_date"]}!")
 
-async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE , is_medosomotr_in_company):
+async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
     context.user_data['answers'] = []
     context.user_data['position'] = 0
 
     await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["anketa"])
-
-    if is_medosomotr_in_company.lower() in {"да", "ага", "угу", "конечно"}:
-        context.user_data['mode'] = 'anketa_osmotr'
-    else:
-        await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["new_state"])
-        await update.message.reply_text(resources.not_client_text)
-        return
+    context.user_data['mode'] = 'anketa_osmotr'
 
     await ask_question(update, context)
 
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pos = context.user_data['position']
 
-    if context.user_data['mode'] == 'anketa_not_osmotr':
-        text = resources.QUESTIONS_IF_NOT_OSMOTR[pos]
-    else:
-        text = resources.QUESTIONS[pos]
+    text = resources.QUESTIONS[pos]
     # await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{text}\n")
 
     keyboard = [[BACK_BUTTON]] if pos > 0 else None
@@ -108,8 +100,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif state == resources.dialog_states_dict['get_name']:
         await name_dialog(update, context)
 
-    elif state == resources.dialog_states_dict['medosmotr_in_company']:
-        await medosmotr_in_company_dialog(update, context)
+    # elif state == resources.dialog_states_dict['medosmotr_in_company']:
+    #     await medosmotr_in_company_dialog(update, context)
 
     # elif state == resources.dialog_states_dict['is_has_complaint']:
     #     await is_has_complaint_dialog(update, context)
@@ -146,7 +138,7 @@ async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["medosmotr_in_company"])
     answer = resources.second_text.format(user_name=name, user_id=user_id)
 
-    doc_say = answer + "\n" + resources.medosmotr_text
+    # doc_say = answer + "\n" + resources.medosmotr_text
     # await dialogs_db.append_answer(telegram_id=update.effective_user.id,text=f"Терапевт сказал:{doc_say}\n")
 
     msg = await context.bot.send_message(
@@ -157,25 +149,25 @@ async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=msg.chat.id,
         message_id=msg.message_id
     )
-
-    await asyncio.sleep(1)
-    await update.message.reply_text(resources.medosmotr_text)
-
-async def medosmotr_in_company_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    is_medosomotr_in_company = update.message.text
-    user_id = update.effective_user.id
+    await asyncio.sleep(1)
+    await start_anketa(update, context)
 
-    user_data = await dialogs_db.get_user(user_id= user_id)
-    await dialogs_db.add_user(user_id = user_id,
-                              name = user_data['name'],
-                              is_medosomotr= is_medosomotr_in_company.lower(),
-                              phone= user_data['phone'],
-                              register_date= user_data['register_date'],
-                              privacy_policy=user_data['privacy_policy'],
-                              privacy_policy_date=user_data['privacy_policy_date']
-                              )
-    await start_anketa(update, context, is_medosomotr_in_company)
+# async def medosmotr_in_company_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+#     is_medosomotr_in_company = update.message.text
+#     user_id = update.effective_user.id
+#
+#     user_data = await dialogs_db.get_user(user_id= user_id)
+#     await dialogs_db.add_user(user_id = user_id,
+#                               name = user_data['name'],
+#                               is_medosomotr= is_medosomotr_in_company.lower(),
+#                               phone= user_data['phone'],
+#                               register_date= user_data['register_date'],
+#                               privacy_policy=user_data['privacy_policy'],
+#                               privacy_policy_date=user_data['privacy_policy_date']
+#                               )
+#     await start_anketa(update, context, is_medosomotr_in_company)
 
 async def anketa_dialog(update, context):
     text = update.message.text
@@ -204,12 +196,15 @@ async def anketa_dialog(update, context):
         return
     else:
         # Завершение анкеты
-        await add_to_anketa(update, context)
+        anketa_answers = context.user_data['answers']
+        await add_to_anketa(update, context, anketa_answers)
         context.user_data['mode'] = None
+
         # answers = context.user_data['answers']
-        # summary = "\n".join(
-        #     f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, answers))
-        # )
+        anketa = "\n".join(
+            f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, anketa_answers))
+        )
+
 
         # wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
 
@@ -244,12 +239,25 @@ async def anketa_dialog(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.message.reply_text("Спасибо! Ваша анкета передана менеджеру для прохождения осмотра.")
-        await asyncio.sleep(1)
-        await update.message.reply_text(resources.analizy_text)
-        await asyncio.sleep(3)
+        #TУТ ЗАПРОС К НЕЙРОНКЕ НА ПОЛУЧЕНИЕ РЕКОМЕГДАЦИЙ
+        await update.message.reply_text("Спасибо! Вашу анкету отправили менеджеру лаборатории!")
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
-        await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
+        user_prompt = prompts.user_prompt_rec_tests.format(anketa = anketa)
+        rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , user_prompt= user_prompt )
+        tests_list = ai_utils.extract_tests(rec_tests_json)
+        if len(tests_list) > 0:
+            await update.message.reply_text(resources.analizy_text.format(tests = ", ".join(tests_list) ))
+            text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
+            await update.message.reply_text(text_about_tests)
+
+            await asyncio.sleep(3)
+
+            await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
+        else:
+            await dialogs_db.set_dialog_state(update.effective_user.id,
+                                              resources.dialog_states_dict["new_state"])
+            await update.message.reply_text("Спасибо за ответы, до встречи на мед осмотре!")
 
 
 async def handle_dop_analizy(update, context):
@@ -528,8 +536,8 @@ async def get_number_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
-    answers = context.user_data['answers']
+async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE, answers ):
+
     if context.user_data.get("mode") == "anketa_osmotr":
         await dialogs_db.add_or_update_anketa(user_id=update.effective_user.id,
                                               organization_or_inn=answers[0],
@@ -541,20 +549,25 @@ async def add_to_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
                                               alcohol= answers[6],
                                               physical_activity= answers[7],
                                               hypertension= answers[8],
-                                              sugar= answers[9],
-                                              chronic_diseases= answers[10])
+                                              darkening_of_the_eyes = answers[9],
+                                              sugar= answers[10],
+                                              joint_pain = answers[11],
+                                              chronic_diseases= answers[12])
     else:
         await dialogs_db.add_or_update_anketa(user_id=update.effective_user.id,
                                               organization_or_inn=answers[0],
-                                              age= answers[1],
-                                              weight= answers[2],
-                                              height= answers[3],
-                                              smoking= answers[4],
-                                              alcohol= answers[5],
-                                              physical_activity= answers[6],
-                                              hypertension= answers[7],
-                                              sugar= answers[8],
-                                              chronic_diseases= answers[9])
+                                              osmotr_date= answers[1],
+                                              age= answers[2],
+                                              weight= answers[3],
+                                              height= answers[4],
+                                              smoking= answers[5],
+                                              alcohol= answers[6],
+                                              physical_activity= answers[7],
+                                              hypertension= answers[8],
+                                              darkening_of_the_eyes = answers[9],
+                                              sugar= answers[10],
+                                              joint_pain = answers[11],
+                                              chronic_diseases= answers[12])
 
 async def send_privacy_policy_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = await dialogs_db.get_user(update.effective_user.id)

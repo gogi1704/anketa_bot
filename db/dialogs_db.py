@@ -43,7 +43,9 @@ async def init_db():
                     alcohol TEXT,
                     physical_activity TEXT,
                     hypertension TEXT,
+                    darkening_of_the_eyes TEXT,
                     sugar TEXT,
+                    joint_pain TEXT,
                     chronic_diseases TEXT,
                     FOREIGN KEY(user_id) REFERENCES user_data(user_id)
                 )
@@ -126,17 +128,17 @@ async def sync_from_google_sheets():
         # user_anketa
         rows = sheets["user_anketa"].get_all_values()[1:]
         for r in rows:
-            user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases = r
+            user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases = r
             await db.execute(
                 """INSERT INTO user_anketa (
                     user_id, organization_or_inn, osmotr_date, age, weight, height,
-                    smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    smoking, alcohol, physical_activity, hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), organization_or_inn, osmotr_date,
                  age if age else None,
                  weight if weight else None,
                  height if height else None,
-                 smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases)
+                 smoking, alcohol, physical_activity, hypertension,darkening_of_the_eyes, sugar, joint_pain, chronic_diseases)
             )
 
         # message_links
@@ -187,10 +189,10 @@ async def sync_to_google_sheets():
         sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date", "get_dop_tests"]] + rows)
 
         # user_anketa
-        async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, sugar, chronic_diseases FROM user_anketa""") as cur:
+        async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases FROM user_anketa""") as cur:
             rows = await cur.fetchall()
         sheets["user_anketa"].clear()
-        sheets["user_anketa"].update("A1", [["user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height", "smoking", "alcohol", "physical_activity", "hypertension", "sugar", "chronic_diseases"]] + rows)
+        sheets["user_anketa"].update("A1", [["user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height", "smoking", "alcohol", "physical_activity", "hypertension", "darkening_of_the_eyes", "sugar", "joint_pain", "chronic_diseases"]] + rows)
 
         # message_links
         async with db.execute("SELECT group_message_id, user_id FROM message_links") as cur:
@@ -213,7 +215,7 @@ async def sync_to_google_sheets():
         print("[✅] Данные из SQLite выгружены в Google Sheets")
 
 # ==== Периодическая синхронизация ====
-async def periodic_sync(interval: int = 120):
+async def periodic_sync(interval: int = 3600):
     while True:
         await asyncio.sleep(interval)
         try:
@@ -326,7 +328,9 @@ async def add_or_update_anketa(
     alcohol: str = None,
     physical_activity: str = None,
     hypertension: str = None,
+    darkening_of_the_eyes:str = None,
     sugar: str = None,
+    joint_pain: str = None,
     chronic_diseases: str = None
 ):
     async with aiosqlite.connect(db_path) as db:
@@ -334,9 +338,9 @@ async def add_or_update_anketa(
             INSERT INTO user_anketa (
                 user_id, organization_or_inn, osmotr_date, age, weight, height,
                 smoking, alcohol, physical_activity,
-                hypertension, sugar, chronic_diseases
+                hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 organization_or_inn = excluded.organization_or_inn,
                 osmotr_date = excluded.osmotr_date,
@@ -347,12 +351,14 @@ async def add_or_update_anketa(
                 alcohol = excluded.alcohol,
                 physical_activity = excluded.physical_activity,
                 hypertension = excluded.hypertension,
+                darkening_of_the_eyes = excluded.darkening_of_the_eyes,
                 sugar = excluded.sugar,
+                joint_pain = excluded.joint_pain,
                 chronic_diseases = excluded.chronic_diseases
         """, (
             user_id, organization_or_inn, osmotr_date, age, weight, height,
             smoking, alcohol, physical_activity,
-            hypertension, sugar, chronic_diseases
+            hypertension,darkening_of_the_eyes, sugar, joint_pain, chronic_diseases
         ))
         await db.commit()
 
@@ -372,7 +378,7 @@ async def update_anketa_fields(user_id: int, change_json: dict) -> dict | None:
         columns = [
             "user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height",
             "smoking", "alcohol", "physical_activity",
-            "hypertension", "sugar", "chronic_diseases"
+            "hypertension","darkening_of_the_eyes", "sugar", "joint_pain", "chronic_diseases"
         ]
         anketa_dict = dict(zip(columns, row))
 
@@ -412,7 +418,7 @@ async def get_anketa(user_id: int) -> dict | None:
             columns = [
                 "user_id", "organization_or_inn", "osmotr_date", "age", "weight", "height",
                 "smoking", "alcohol", "physical_activity",
-                "hypertension", "sugar", "chronic_diseases"
+                "hypertension","darkening_of_the_eyes", "sugar", "joint_pain", "chronic_diseases"
             ]
             return dict(zip(columns, row))
         return None
