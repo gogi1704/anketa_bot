@@ -49,7 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_name"] )
     else:
-        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user["name"]}! Ожидаем вас на осмотре {anketa["osmotr_date"]}!")
+        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user['name']}! Ожидаем вас на осмотре {anketa['osmotr_date']}!")
 
 async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE ):
     context.user_data['answers'] = []
@@ -244,16 +244,18 @@ async def anketa_dialog(update, context):
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
         user_prompt = prompts.user_prompt_rec_tests.format(anketa = anketa)
-        rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , user_prompt= user_prompt )
+        rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , user_prompt= user_prompt, context= context )
         tests_list = ai_utils.extract_tests(rec_tests_json)
         if len(tests_list) > 0:
-            await update.message.reply_text(resources.analizy_text.format(tests = ", ".join(tests_list) ))
-            text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
-            await update.message.reply_text(text_about_tests)
+            await update.message.reply_text(resources.analizy_text.format(tests = "\n".join(tests_list) ))
+            # text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
 
-            await asyncio.sleep(3)
+            await update.message.reply_text(text="Также, вы можете выбрать абсолютно любой из представленных комплексов услуг (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
+                                            parse_mode="HTML")
 
-            await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
+            await asyncio.sleep(2)
+
+            await update.message.reply_text("Записать Вас на дополнительные исследования? ", reply_markup= reply_markup )
         else:
             await dialogs_db.set_dialog_state(update.effective_user.id,
                                               resources.dialog_states_dict["new_state"])
@@ -381,7 +383,7 @@ async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_
     user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
     user_prompt = prompts.user_prompt_is_has_complaint.format(dialog = user_dialog )
 
-    complaint_json = await get_gpt_answer(system_prompt= prompts.system_prompt_is_has_complaint, user_prompt= user_prompt)
+    complaint_json = await get_gpt_answer(system_prompt= prompts.system_prompt_is_has_complaint, user_prompt= user_prompt,context= context)
     terapevt_state, complaints = ai_utils.parse_complaint_response(complaint_json)
     print(complaints)
 
@@ -413,13 +415,13 @@ async def terapevt_consult_dialog(update: Update, context: ContextTypes.DEFAULT_
     user_problem = context.user_data['user_problem']
     dialog = await dialogs_db.get_dialog(update.effective_user.id)
     user_prompt_terapevt_stop = prompts.user_prompt_stop_terapevt.format(user_problem =user_problem ,dialog = dialog)
-    is_stop_terapevt = await get_gpt_answer(system_prompt= prompts.system_prompt_stop_terapevt, user_prompt= user_prompt_terapevt_stop)
+    is_stop_terapevt = await get_gpt_answer(system_prompt= prompts.system_prompt_stop_terapevt, user_prompt= user_prompt_terapevt_stop,context= context)
 
     if is_stop_terapevt == "terapevt_complete":
         await dialogs_db.set_dialog_state(update.effective_user.id,
                                           resources.dialog_states_dict["is_ready_to_consult"])
         user_prompt_get_recs = prompts.user_prompt_get_rec.format(dialog = dialog)
-        recs = await get_gpt_answer(system_prompt=prompts.system_prompt_get_rec, user_prompt= user_prompt_get_recs)
+        recs = await get_gpt_answer(system_prompt=prompts.system_prompt_get_rec, user_prompt= user_prompt_get_recs,context= context)
         anketa = await dialogs_db.get_anketa(update.effective_user.id)
 
         await update.message.reply_text(resources.get_anketa_formatted(anketa))
@@ -435,7 +437,7 @@ async def terapevt_consult_dialog(update: Update, context: ContextTypes.DEFAULT_
         user_prompt_terapevt_consult = prompts.user_prompt_terapevt_consult.format(user_problem=user_problem,
                                                                                    dialog=dialog)
         terapevt_say = await get_gpt_answer(system_prompt=prompts.system_prompt_terapevt_consult,
-                                            user_prompt=user_prompt_terapevt_consult)
+                                            user_prompt=user_prompt_terapevt_consult,context= context)
 
         text = terapevt_say
         await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{terapevt_say}")
@@ -451,7 +453,7 @@ async def change_anketa_dialog(update: Update, context: ContextTypes.DEFAULT_TYP
     anketa = await dialogs_db.get_anketa(update.effective_user.id)
 
     user_prompt_change_anketa = prompts.user_prompt_change_anketa.format(dialog = dialog, anketa = anketa)
-    terapevt_say = await get_gpt_answer(system_prompt= prompts.system_prompt_change_anketa,user_prompt= user_prompt_change_anketa)
+    terapevt_say = await get_gpt_answer(system_prompt= prompts.system_prompt_change_anketa,user_prompt= user_prompt_change_anketa,context= context)
 
     if terapevt_say == "not_change":
         await dialogs_db.set_dialog_state(update.effective_user.id,
@@ -460,7 +462,7 @@ async def change_anketa_dialog(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif terapevt_say == "change_complete":
         user_prompt_fix = prompts.user_prompt_fix_anketa.format(dialog = dialog)
-        fix_json = await get_gpt_answer(system_prompt= prompts.system_prompt_fix_anketa, user_prompt= user_prompt_fix)
+        fix_json = await get_gpt_answer(system_prompt= prompts.system_prompt_fix_anketa, user_prompt= user_prompt_fix,context= context)
         fix_data = json.loads(fix_json) if isinstance(fix_json, str) else fix_json
 
         new_anketa = await dialogs_db.update_anketa_fields(update.effective_user.id, dict(fix_data))
@@ -479,7 +481,7 @@ async def is_ready_to_consult_dialog(update: Update, context: ContextTypes.DEFAU
     user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
 
     user_prompt_is_ready = prompts.user_prompt_is_ready_to_consult.format(dialog = user_dialog)
-    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_is_ready_to_consult, user_prompt= user_prompt_is_ready)
+    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_is_ready_to_consult, user_prompt= user_prompt_is_ready,context= context)
 
     if manager_say == "user_true":
         await send_privacy_policy_message(update, context)
@@ -497,7 +499,7 @@ async def get_number_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_dialog = await dialogs_db.get_dialog(update.effective_user.id)
 
     user_prompt_get_number = prompts.user_prompt_get_number.format(dialog = user_dialog)
-    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_get_number, user_prompt= user_prompt_get_number)
+    manager_say = await get_gpt_answer(system_prompt= prompts.system_prompt_get_number, user_prompt= user_prompt_get_number,context= context)
 
     if "get_number_false" in manager_say:
         await dialogs_db.set_dialog_state(update.effective_user.id,
