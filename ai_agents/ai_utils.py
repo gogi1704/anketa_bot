@@ -47,3 +47,16 @@ def format_medical_risk_from_any(text: str) -> str:
     # comment = value.get("comment", "—")
 
     return f"\nОписание: {description}"
+
+def extract_tests(agent_response: str):
+    if isinstance(agent_response, str):
+        try:
+            data = json.loads(agent_response)
+        except json.JSONDecodeError:
+            raise ValueError("Ответ агента не является корректным JSON")
+    elif isinstance(agent_response, dict):
+        data = agent_response
+    else:
+        raise TypeError("Ответ агента должен быть строкой JSON или dict")
+
+    return data.get("tests", [])
