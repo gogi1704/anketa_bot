@@ -118,7 +118,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await get_number_dialog(update, context)
 
     elif state == resources.dialog_states_dict['new_state']:
-        await update.message.reply_text("new_state")
+        user = await dialogs_db.get_user(update.effective_user.id)
+        anketa = await  dialogs_db.get_anketa(user_id=update.effective_user.id)
+        name = user["name"]
+        date = anketa["osmotr_date"]
+
+        await update.message.reply_text(f"Приветствую {name}. До встречи на осмотре {date}")
 
     else:
         print("handle_text_message - else")
@@ -233,6 +238,13 @@ async def anketa_dialog(update, context):
         await ask_question(update, context)
         return
 
+    if pos == 1:  # если это второй вопрос (индексация с 0)
+        ok, err = util_fins.validate_date_input(text)
+        if not ok:
+            # Отправляем конкретную ошибку и не продвигаем позицию — остаёмся на том же вопросе
+            await update.message.reply_text(err)
+            return
+
     context.user_data['answers'].append(text)
     context.user_data['position'] += 1
 
@@ -271,10 +283,11 @@ async def anketa_dialog(update, context):
                 await update.message.reply_text(resources.analizy_text.format(tests = ", ".join(tests_list) ))
                 text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
                 await update.message.reply_text(text_about_tests)
+                await asyncio.sleep(2)
                 await update.message.reply_text(text="Также, вы можете выбрать абсолютно любой из представленных комплексов услуг (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
                                                 parse_mode="HTML")
 
-                await asyncio.sleep(3)
+                await asyncio.sleep(2)
                 await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
             else:
 
@@ -308,7 +321,7 @@ async def handle_pay(update, context):
 
     elif answer == "pay_no":
         await query.message.reply_text(
-            f"Спасибо! Ваш запись передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+            f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
         await dialogs_db.set_dialog_state(update.effective_user.id,resources.dialog_states_dict["new_state"])
 
 async def handle_dop_analizy(update, context):
@@ -447,7 +460,14 @@ async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            text="Во время медосмотра, рекомендуем пройти доп обследования. Вы можете выбрать абсолютно любой из представленных комплексов услуг (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
+            text="Поздравляем! У вас отличное состояние здоровья! Но в целях профилактики мы рекомендуем пройти обследования: Сердце и сосуды",
+            parse_mode="HTML")
+
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+        await asyncio.sleep(3)
+
+        await update.message.reply_text(
+            text="Также, перед мед-осмотром, вы можете выбрать любой из представленных комплексов услуг и сдать анализы не жертвуя личным временем (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
             parse_mode="HTML")
         await update.message.reply_text("Вы хотели бы сдать дополнительные анализы на осмотре?",
                                         reply_markup=reply_markup)

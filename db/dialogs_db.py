@@ -133,7 +133,7 @@ async def sync_from_google_sheets():
                 """INSERT INTO user_anketa (
                     user_id, organization_or_inn, osmotr_date, age, weight, height,
                     smoking, alcohol, physical_activity, hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), organization_or_inn, osmotr_date,
                  age if age else None,
                  weight if weight else None,
