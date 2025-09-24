@@ -1,4 +1,5 @@
 from datetime import datetime
+import random
 
 def normalize_name(text: str) -> str:
     return ' '.join(word.capitalize() for word in text.strip().split())
@@ -45,3 +46,10 @@ def validate_date_input(date_text: str):
         return False, "Возможно, вы случайно ввели прошедшую дату. Введите корректное значение, в формате ДД.ММ.ГГГГ (пример: 12.12.2025). "
 
     return True, None
+
+def pick_first_and_two_random(items):
+    if len(items) < 3:
+        return items
+    first = items[0]
+    rand_two = random.sample(items[1:], 2)  # берём 2 разных случайных
+    return [first] + rand_two

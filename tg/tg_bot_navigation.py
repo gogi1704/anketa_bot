@@ -48,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_name"] )
     else:
         anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
-        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user["name"]}! Ожидаем вас на осмотре {anketa["osmotr_date"]}!")
+        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user['name']}! Ожидаем вас на осмотре {anketa['osmotr_date']}!")
 
 async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['answers'] = []
@@ -262,7 +262,8 @@ async def anketa_dialog(update, context):
             anketa = "\n".join(
                 f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, anketa_answers))
             )
-
+            user = await dialogs_db.get_user(update.effective_user.id)
+            user_name = user["name"]
             keyboard = [
                 [InlineKeyboardButton("Да", callback_data='dop_yes')],
                 [InlineKeyboardButton("Нет", callback_data='dop_no')]
@@ -273,14 +274,14 @@ async def anketa_dialog(update, context):
 
             await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
-            user_prompt = prompts.user_prompt_rec_tests.format(anketa = anketa)
+            user_prompt = prompts.user_prompt_rec_tests.format(anketa = f"Имя - {user_name}\n" + anketa)
 
 
             rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , context= context, user_prompt= user_prompt,model= "gpt-5-mini"  )
             tests_list = ai_utils.extract_tests(rec_tests_json)
-
             if len(tests_list) > 0:
-                await update.message.reply_text(resources.analizy_text.format(tests = ", ".join(tests_list) ))
+                tests_list = util_fins.pick_first_and_two_random(items=tests_list)
+                await update.message.reply_text(resources.analizy_text.format(tests = "\n- ".join(tests_list) ))
                 text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
                 await update.message.reply_text(text_about_tests)
                 await asyncio.sleep(2)
@@ -317,11 +318,11 @@ async def handle_pay(update, context):
         text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре {date}.\n\nОбследования: {chosen} "
         await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
         await asyncio.sleep(2)
-        await query.message.reply_text(f"Спасибо! Ваш запись передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+        await query.message.reply_text(f"Спасибо! Ваша запись передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
 
     elif answer == "pay_no":
         await query.message.reply_text(
-            f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+            f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
         await dialogs_db.set_dialog_state(update.effective_user.id,resources.dialog_states_dict["new_state"])
 
 async def handle_dop_analizy(update, context):
@@ -438,7 +439,7 @@ async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
 
         # text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре {date}.\n\nОбследования: {chosen} "
         # await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
-        # await query.message.reply_text(f"Спасибо! Ваш запись передана менеджеру.\nНа приему скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+        # await query.message.reply_text(f"Спасибо! Ваша запись передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
         text, price = await util_fins.get_list_and_price(list_tests=context.user_data["selected_tests"] , tests_price= resources.TESTS_PRICE)
         await query.message.reply_text(text=f"Итоговый список анализов:\n{text}. \n\n Итоговая стоимость: {price}р.", reply_markup=reply_markup)
 
@@ -460,7 +461,7 @@ async def is_has_complaint_dialog(update: Update, context: ContextTypes.DEFAULT_
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            text="Поздравляем! У вас отличное состояние здоровья! Но в целях профилактики мы рекомендуем пройти обследования: Сердце и сосуды",
+            text=resources.user_all_right_text,
             parse_mode="HTML")
 
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
