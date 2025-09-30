@@ -1,16 +1,17 @@
-from datetime import datetime
 import random
+from utils.anketa_utils import *
+from db import dialogs_db
+import resources
+
 
 def normalize_name(text: str) -> str:
     return ' '.join(word.capitalize() for word in text.strip().split())
-
 
 async def get_info_by_tests(tests_list, test_info):
     text = ""
     for test in tests_list:
         text += f"{test_info[test]}\n\n"
     return text
-
 
 async def get_list_and_price(list_tests,tests_price ):
     text = ""
@@ -21,35 +22,100 @@ async def get_list_and_price(list_tests,tests_price ):
 
     return text, price
 
-
-
-def validate_date_input(date_text: str):
-    """
-    Проверяет формат ДД.ММ.ГГГГ (допускает . / - как разделители).
-    Проверяет, что дата >= сегодня.
-    Возвращает (True, None) если всё ок, иначе (False, error_message).
-    """
-    date_text = (date_text or "").strip()
-    if not date_text:
-        return False, "Пустая строка. Введите дату в формате ДД.ММ.ГГГГ (пример: 11.11.2025)."
-
-    # Приводим все разделители к точке
-    normalized = date_text.replace("-", ".").replace("/", ".")
-
-    try:
-        user_date = datetime.strptime(normalized, "%d.%m.%Y").date()
-    except ValueError:
-        return False, "Введите дату в формате ДД.ММ.ГГГГ (пример: 12.12.2025)."
-
-    today = datetime.today().date()
-    if user_date < today:
-        return False, "Возможно, вы случайно ввели прошедшую дату. Введите корректное значение, в формате ДД.ММ.ГГГГ (пример: 12.12.2025). "
-
-    return True, None
-
 def pick_first_and_two_random(items):
     if len(items) < 3:
         return items
     first = items[0]
     rand_two = random.sample(items[1:], 2)  # берём 2 разных случайных
     return [first] + rand_two
+
+async def validate_anketa_questions(position, user_say, text,update = None,context = None):
+    # Вопросы которые проверяются на формат
+    # ИНН
+    if position == 0:
+        result = validate_inn(user_say)
+        return result
+    # ДАТА ОСМОТРА
+    elif position == 1:
+        ok, err = validate_date_input(user_say)
+        if not ok:
+            # Отправляем конкретную ошибку и не продвигаем позицию — остаёмся на том же вопросе
+            return err
+        else:
+            return "complete"
+    # ВОЗРАСТ
+    elif position == 2:
+        result = validate_age(user_say)
+        return result
+    # ВЕС
+    elif position == 3:
+        result = validate_weight(user_say)
+        return result
+    # РОСТ
+    elif position == 4:
+        result = validate_height(user_say)
+        return result
+
+    # Вопросы с кнопками
+    # ВОПРОС С КНОПКАМИ- КУРЕНИЕ
+    elif position == 5:
+       if text in ["Да", "Нет", BACK_BUTTON]:
+           return "complete"
+       else:
+           return "empty"
+    # ВОПРОС С КНОПКАМИ- Алкоголь
+    elif position == 6:
+        if text in ["Не употребляю", "По праздникам","Раз в неделю","Раз в месяц", BACK_BUTTON]:
+            return "complete"
+        else:
+            return "empty"
+    # ВОПРОС С КНОПКАМИ- Физическая активность
+    elif position == 7:
+       if text in ["Высокая", "Средняя", "Низкая", BACK_BUTTON]:
+           return "complete"
+       else:
+           return "empty"
+    # ВОПРОС С КНОПКАМИ - Потемнения в глазах
+    elif position == 9:
+        if text in ["Да", "Нет", BACK_BUTTON]:
+            return "complete"
+        else:
+            return "empty"
+    # ВОПРОС С КНОПКАМИ - Сахар
+    elif position == 10:
+        if text in ["Сахар всегда в норме", "Встречались случаи повышенного","Сахар повышенный","Сахар пониженный","Не мониторю", BACK_BUTTON]:
+            return "complete"
+        else:
+            return "empty"
+    # ВОПРОС С КНОПКАМИ - Бывает ли боль в суставах
+    elif position == 11:
+        if text in ["Да","Нет", BACK_BUTTON]:
+            return "complete"
+        else:
+            return "empty"
+
+    #Вопросы с нейро-проверкой
+    elif position == 8:
+        dialog = await dialogs_db.get_dialog(update.effective_user.id)
+        result = await question_hyperton(dialog, context)
+        if "complete" in result:
+            context.user_data['answers'].append(result)
+            await dialogs_db.delete_dialog(update.effective_user.id)
+            return "complete"
+        else:
+            await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{result}\n")
+            return result
+
+    elif position == 12:
+        dialog = await dialogs_db.get_dialog(update.effective_user.id)
+        result = await question_hronic(dialog, context)
+        if "complete" in result:
+            context.user_data['answers'].append(result)
+            await dialogs_db.delete_dialog(update.effective_user.id)
+            return "complete"
+        else:
+            await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{result}\n")
+            return result
+
+    else:
+        return  "complete"
