@@ -11,6 +11,7 @@ from tg import tg_bot_telegraph
 from telegram.ext import ContextTypes
 from utils.anketa_utils import *
 
+
 image_path = Path(__file__).parent.parent / "images" / "image_andrey.jpg"
 async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -337,10 +338,11 @@ async def handle_pay(update, context):
     user_data = await dialogs_db.get_user(user_id=update.effective_user.id)
     anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
     date = anketa["osmotr_date"]
+    date_obj = datetime.strptime(date, "%d.%m.%Y")
 
     if answer == "pay_yes":
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔔 Напомнить за день до визита", callback_data="remind_1_day")]
+            [InlineKeyboardButton("🔔 Напомнить за день до визита", callback_data=f"remind:{date_obj.isoformat()}")]
         ])
 
         await query.message.reply_text("Спасибо! Оплата прошла успешно.(прислать чек)Поздравляем, Вы полностью готовы к визиту!(когда подключим платежку)")
@@ -356,11 +358,7 @@ async def handle_pay(update, context):
             f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nЕсли у Вас возникнут вопросы по дополнительным обследованиям, Вы всегда можете проконсультироваться с нашим менеджером в день осмотра.\nБудем ждать Вас {date} на осмотре!")
         await dialogs_db.set_dialog_state(update.effective_user.id,resources.dialog_states_dict["new_state"])
 
-async def handle_remind(update, context):
-    query = update.callback_query
-    if query.data == "remind_1_day":
-        await query.answer("Хорошо! Напомню за день до осмотра.")
-        # тут можно сохранить info в базу или поставить задачу в планировщик
+
 
 async def handle_dop_analizy(update, context):
     query = update.callback_query
@@ -680,7 +678,3 @@ async def send_privacy_policy_message(update: Update, context: ContextTypes.DEFA
     reply_markup = InlineKeyboardMarkup(keyboard)
     text = resources.privacy_text.format(url = url)
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
-
-
-
-

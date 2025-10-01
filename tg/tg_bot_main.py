@@ -4,6 +4,7 @@ from tg.tg_bot_navigation import *
 from tg.tg_manager_chat_handlers import *
 from tg.tg_bot_channel_funs import *
 from tg.tg_error_handlers import error_handler
+from tg.tg_bot_reminder import handle_remind
 from db import dialogs_db
 import nest_asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -63,6 +64,8 @@ async def main():
     asyncio.create_task(periodic_sync())
 
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
+    application.post_init = load_reminders_on_startup
+
     print('Бот запущен...')
     await application.bot.set_my_commands([
         BotCommand("start", "Пуск"),
@@ -78,7 +81,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(handle_toggle, pattern="^(toggle:|done)"))
     application.add_handler(CallbackQueryHandler(handle_dop_analizy, pattern="^dop_"))
     application.add_handler(CallbackQueryHandler(handle_pay, pattern="^pay_"))
-    application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind_"))
+    application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind:"))
 
     # application.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
 

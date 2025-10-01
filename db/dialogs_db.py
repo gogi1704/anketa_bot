@@ -4,6 +4,8 @@ import asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+from tg.tg_bot_reminder import send_reminder
+
 db_path='dialogs.db'
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # на уровень выше папки db
 CREDS_PATH = os.path.join(BASE_DIR, "docs", "anamnez-bot-fd6467c32f62.json")
@@ -72,6 +74,16 @@ async def init_db():
                 )
             """)
 
+            # Таблица напоминаний
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS reminders (
+                    user_id INTEGER NOT NULL,
+                    visit_date DATETIME NOT NULL,
+                    reminder_time DATETIME NOT NULL,
+                    PRIMARY KEY (user_id, visit_date)
+                )
+            """)
+
             await db.commit()
         await sync_from_google_sheets()
 
@@ -93,6 +105,7 @@ def get_sheet():
         "message_links": sheet.worksheet("message_links"),
         "user_reply_state": sheet.worksheet("user_reply_state"),
         "dialog_states": sheet.worksheet("dialog_states"),
+        "reminders": sheet.worksheet("reminders"),
     }
 
 # ==== Загрузка данных из Google Sheets в SQLite ====
@@ -106,7 +119,7 @@ async def sync_from_google_sheets():
         await db.execute("DELETE FROM message_links")
         await db.execute("DELETE FROM user_reply_state")
         await db.execute("DELETE FROM dialog_states")
-
+        await db.execute("DELETE FROM reminders")
         # patient_dialogs
         rows = sheets["patient_dialogs"].get_all_values()[1:]
         for r in rows:
@@ -168,6 +181,15 @@ async def sync_from_google_sheets():
                 (int(user_id), dialog_state)
             )
 
+        # reminders
+        rows = sheets["reminders"].get_all_values()[1:]
+        for r in rows:
+            user_id, visit_date, reminder_time = r
+            await db.execute(
+                "INSERT INTO reminders (user_id, visit_date, reminder_time) VALUES (?, ?, ?)",
+                (int(user_id), visit_date, reminder_time)
+            )
+
         await db.commit()
         print("[✅] Данные из Google Sheets загружены в SQLite")
 
@@ -212,10 +234,16 @@ async def sync_to_google_sheets():
         sheets["dialog_states"].clear()
         sheets["dialog_states"].update("A1", [["user_id", "dialog_state"]] + rows)
 
+        # reminds
+        async with db.execute("SELECT user_id, visit_date, reminder_time FROM reminders") as cur:
+            rows = await cur.fetchall()
+        sheets["reminders"].clear()
+        sheets["reminders"].update("A1", [["user_id", "visit_date", "reminder_time"]] + rows)
+
         print("[✅] Данные из SQLite выгружены в Google Sheets")
 
 # ==== Периодическая синхронизация ====
-async def periodic_sync(interval: int = 3600):
+async def periodic_sync(interval: int = 180):
     while True:
         await asyncio.sleep(interval)
         try:
@@ -431,9 +459,7 @@ async def delete_anketa(user_id: int):
         )
         await db.commit()
 
-#______
-
-#STATE
+#______ #STATE
 async def set_dialog_state(user_id: int, state: str):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
@@ -443,7 +469,6 @@ async def set_dialog_state(user_id: int, state: str):
         """, (user_id, state))
         await db.commit()
 
-
 async def get_dialog_state(user_id: int) -> str | None:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute("""
@@ -452,7 +477,6 @@ async def get_dialog_state(user_id: int) -> str | None:
             row = await cursor.fetchone()
             return row[0] if row else None
 
-
 async def delete_dialog_state(user_id: int):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
@@ -460,8 +484,38 @@ async def delete_dialog_state(user_id: int):
         """, (user_id,))
         await db.commit()
 
-#______
+#______ #REMINDS
+async def save_reminder(user_id: int, visit_date: datetime, reminder_time: datetime):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO reminders (user_id, visit_date, reminder_time) VALUES (?, ?, ?)",
+            (user_id, visit_date.strftime("%Y-%m-%d %H:%M:%S"), reminder_time.strftime("%Y-%m-%d %H:%M:%S"))
+        )
+        await db.commit()
 
+async def load_reminders_on_startup(application):
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute("SELECT user_id, visit_date, reminder_time FROM reminders") as cursor:
+            async for row in cursor:
+                user_id, visit_date_str, reminder_time_str = row
+
+                # Парсим дату (если у тебя хранится как '03.10.2025')
+                visit_date = datetime.datetime.strptime(visit_date_str, "%Y-%m-%d %H:%M:%S") \
+                    if "-" in visit_date_str else datetime.datetime.strptime(visit_date_str, "%d.%m.%Y")
+
+                reminder_time = datetime.datetime.strptime(reminder_time_str, "%Y-%m-%d %H:%M:%S")
+
+                if reminder_time > datetime.datetime.now():
+                    job_name = f"reminder_{user_id}_{visit_date.date()}"
+                    application.job_queue.run_once(
+                        send_reminder,
+                        when=reminder_time,
+                        chat_id=user_id,
+                        name=job_name
+                    )
+
+
+#______
 async def save_message_link(group_msg_id: int, user_id: int):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
