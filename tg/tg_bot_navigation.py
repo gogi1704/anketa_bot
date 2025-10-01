@@ -1,10 +1,8 @@
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
-from telegram import Message
 from ai_agents.open_ai_main import get_gpt_answer
-from ai_agents import prompts, ai_utils
+from ai_agents import ai_utils
 from db import dialogs_db
-import resources
 import asyncio
 from pathlib import Path
 import util_fins
@@ -264,7 +262,7 @@ async def anketa_dialog(update, context):
         return
 
 
-    if pos != 8:
+    if pos not in (8, 12):
         context.user_data['answers'].append(text)
     context.user_data['position'] += 1
 
@@ -272,8 +270,9 @@ async def anketa_dialog(update, context):
         await ask_question(update, context)
         return
     else:
+        await update.message.reply_text("Спасибо за ответы! Анкета для прохождения осмотра заполнена.")
         # Завершение анкеты
-        wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
+        # wait_msg: Message = await update.message.reply_text("⏳ анализирую анкету...")
         try:
             anketa_answers = context.user_data['answers']
             await add_to_anketa(update, context,anketa_answers)
@@ -294,22 +293,27 @@ async def anketa_dialog(update, context):
 
             await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
 
-            user_prompt = prompts.user_prompt_rec_tests.format(anketa = f"Имя - {user_name}\n" + anketa)
+            user_prompt = prompts.user_prompt_new_rec_tests.format(anketa = anketa)
+            recs = await get_gpt_answer(system_prompt= prompts.system_prompt_new_rec_tests, user_prompt= user_prompt, context= context)
+            risks, recommendations_list, rec_text = ai_utils.extract_recs(recs)
 
+            risk_text = f"Проанализировав ваши ответы, я выявил некоторые риски:\n{risks}\n\nНа основе этого анализа, я сформировал персональную рекомендацию."
+            recomendation_text = f"Проф осмотр дает общую картину, но для тех, кто хочет получить более глубокое понимание состояния организма, мы разработали специальные пакеты анализов.\nВам полезно пройти комплекс исследований:\n{rec_text} "
 
-            rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , context= context, user_prompt= user_prompt,model= "gpt-5-mini"  )
-            tests_list = ai_utils.extract_tests(rec_tests_json)
-            if len(tests_list) > 0:
-                tests_list = util_fins.pick_first_and_two_random(items=tests_list)
-                await update.message.reply_text(resources.analizy_text.format(tests = "\n- ".join(tests_list) ))
-                text_about_tests = await util_fins.get_info_by_tests(tests_list = tests_list, test_info= resources.TESTS_INFO)
-                await update.message.reply_text(text_about_tests)
+            # user_prompt = prompts.user_prompt_rec_tests.format(anketa = f"Имя - {user_name}\n" + anketa)
+            # rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , context= context, user_prompt= user_prompt,model= "gpt-5-mini"  )
+            # tests_list = ai_utils.extract_tests(rec_tests_json)
+
+            if len(recommendations_list) > 0:
+                await update.message.reply_text(risk_text, parse_mode="HTML")
+                await asyncio.sleep(2)
+                await update.message.reply_text(recomendation_text, parse_mode="HTML")
                 await asyncio.sleep(2)
                 await update.message.reply_text(text="Также, вы можете выбрать абсолютно любой из представленных комплексов услуг (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
                                                 parse_mode="HTML")
 
                 await asyncio.sleep(2)
-                await update.message.reply_text("Вы планируете сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
+                await update.message.reply_text("Вы хотели бы сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
             else:
 
                 await dialogs_db.append_answer(telegram_id=user_id, text=f"Терапевт сказал:{resources.is_has_complaint_text}")
@@ -317,11 +321,12 @@ async def anketa_dialog(update, context):
                 await update.message.reply_text(resources.is_has_complaint_text, reply_markup=ReplyKeyboardRemove())
 
         finally:
+            print(" ")
                 # 4. Удаляем сообщение с часами (в любом случае)
-                try:
-                    await wait_msg.delete()
-                except Exception as e:
-                    print(f"⚠️ Не удалось удалить сообщение: {e}")
+                # try:
+                #     await wait_msg.delete()
+                # except Exception as e:
+                #     print(f"⚠️ Не удалось удалить сообщение: {e}")
 
 
 
@@ -334,16 +339,28 @@ async def handle_pay(update, context):
     date = anketa["osmotr_date"]
 
     if answer == "pay_yes":
-        await query.message.reply_text("Тут будет оплата, ну будем считать что ты оплатил!Пришлем тебе чек, и так далее.")
-        text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре {date}.\n\nОбследования: {chosen} "
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔔 Напомнить за день до визита", callback_data="remind_1_day")]
+        ])
+
+        await query.message.reply_text("Спасибо! Оплата прошла успешно.(прислать чек)Поздравляем, Вы полностью готовы к визиту!(когда подключим платежку)")
+        await asyncio.sleep(2)
+        await query.message.reply_text(f"Ваша дата осмотра :{date}.\nПри себе необходимо иметь паспорт.Все вопросы Вы можете задать менеджеру лаборатории оп телефону ... \nХорошего дня и до встречи!",reply_markup=keyboard)
+
+        text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре (и уже оплатил){date}.\n\nОбследования: {chosen} "
         await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
         await asyncio.sleep(2)
-        await query.message.reply_text(f"Спасибо! Ваша запись передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
 
     elif answer == "pay_no":
         await query.message.reply_text(
-            f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
+            f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nЕсли у Вас возникнут вопросы по дополнительным обследованиям, Вы всегда можете проконсультироваться с нашим менеджером в день осмотра.\nБудем ждать Вас {date} на осмотре!")
         await dialogs_db.set_dialog_state(update.effective_user.id,resources.dialog_states_dict["new_state"])
+
+async def handle_remind(update, context):
+    query = update.callback_query
+    if query.data == "remind_1_day":
+        await query.answer("Хорошо! Напомню за день до осмотра.")
+        # тут можно сохранить info в базу или поставить задачу в планировщик
 
 async def handle_dop_analizy(update, context):
     query = update.callback_query
@@ -461,7 +478,8 @@ async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
         # await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
         # await query.message.reply_text(f"Спасибо! Ваша запись передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nБудем ждать Вас {date} на осмотре!")
         text, price = await util_fins.get_list_and_price(list_tests=context.user_data["selected_tests"] , tests_price= resources.TESTS_PRICE)
-        await query.message.reply_text(text=f"Итоговый список анализов:\n{text}. \n\n Итоговая стоимость: {price}р.", reply_markup=reply_markup)
+
+        await query.message.reply_text(text=resources.get_final_text_tests_with_price(tests=text, price = price), reply_markup=reply_markup, parse_mode= "HTML")
 
 
 

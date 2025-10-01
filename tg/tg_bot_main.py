@@ -78,7 +78,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(handle_toggle, pattern="^(toggle:|done)"))
     application.add_handler(CallbackQueryHandler(handle_dop_analizy, pattern="^dop_"))
     application.add_handler(CallbackQueryHandler(handle_pay, pattern="^pay_"))
-
+    application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind_"))
 
     # application.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
 

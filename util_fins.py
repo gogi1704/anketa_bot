@@ -83,7 +83,7 @@ async def validate_anketa_questions(position, user_say, text,update = None,conte
             return "empty"
     # ВОПРОС С КНОПКАМИ - Сахар
     elif position == 10:
-        if text in ["Сахар всегда в норме", "Встречались случаи повышенного","Сахар повышенный","Сахар пониженный","Не мониторю", BACK_BUTTON]:
+        if text in ["Сахар всегда в норме", "Встречались случаи повышенного","Повышенный","Пониженный","Не мониторю", BACK_BUTTON]:
             return "complete"
         else:
             return "empty"

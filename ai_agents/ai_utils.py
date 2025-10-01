@@ -1,5 +1,7 @@
-import json
 import ast
+import json
+from typing import List, Dict
+import html
 
 def filter_by_threat_level(data: dict, threshold: int = 6) -> dict:
     """
@@ -60,3 +62,30 @@ def extract_tests(agent_response: str):
         raise TypeError("Ответ агента должен быть строкой JSON или dict")
 
     return data.get("tests", [])
+
+def extract_recs(response_str: str):
+        try:
+            data = json.loads(response_str)
+
+            risks: List[str] = data.get("risks", [])
+            risks_text = "\n".join(risks)
+            recommendations: List[Dict[str, str]] = data.get("recommendations", [])
+
+            rec_text = ""
+            for rec in recommendations:
+                rec_text += rec['reason']
+                rec_text += "-"
+                rec_text += bold_html(rec['test'])
+                rec_text += "\n"
+
+            return bold_html(risks_text), recommendations, rec_text
+
+        except json.JSONDecodeError:
+            raise ValueError("Некорректный формат JSON от агента")
+
+def bold_html(text: str) -> str:
+    """
+    Экранирует текст для HTML и оборачивает его в <b>...</b>
+    """
+    safe_text = html.escape(text)
+    return f"<b>{safe_text}</b>"
