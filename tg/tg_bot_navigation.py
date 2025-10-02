@@ -19,8 +19,8 @@ async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await dialogs_db.delete_user(user_id)
     await dialogs_db.delete_user_reply_state(user_id)
     await dialogs_db.delete_anketa(user_id)
-
-    await update.message.reply_text("Все данные успешно очищены.")
+    await dialogs_db.cancel_reminders(user_id=update.effective_user.id, application=context.application )
+    await start(update, context)
 
 async def stop_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -298,8 +298,8 @@ async def anketa_dialog(update, context):
             recs = await get_gpt_answer(system_prompt= prompts.system_prompt_new_rec_tests, user_prompt= user_prompt, context= context)
             risks, recommendations_list, rec_text = ai_utils.extract_recs(recs)
 
-            risk_text = f"Проанализировав ваши ответы, я выявил некоторые риски:\n{risks}\n\nНа основе этого анализа, я сформировал персональную рекомендацию."
-            recomendation_text = f"Проф осмотр дает общую картину, но для тех, кто хочет получить более глубокое понимание состояния организма, мы разработали специальные пакеты анализов.\nВам полезно пройти комплекс исследований:\n{rec_text} "
+            risk_text = f"Проанализировав ваши ответы, я выявил некоторые риски:\n{risks}\n\n"
+            recomendation_text = f"На основе этого анализа, я сформировал персональную рекомендацию.\nВам полезно пройти комплекс исследований:\n{rec_text}\n\nПрохождение этих исследований займет минимум времени, выгодно и о заботе здоровья..."
 
             # user_prompt = prompts.user_prompt_rec_tests.format(anketa = f"Имя - {user_name}\n" + anketa)
             # rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , context= context, user_prompt= user_prompt,model= "gpt-5-mini"  )
@@ -372,9 +372,36 @@ async def handle_dop_analizy(update, context):
     elif answer == "dop_no":
         await dialogs_db.set_dialog_state(update.effective_user.id,
                                           resources.dialog_states_dict["new_state"])
-        anketa =  await dialogs_db.get_anketa(user_id= update.effective_user.id)
+
+        keyboard = [
+            [InlineKeyboardButton("Хочу сдать анализы", callback_data='dopDop_yes')],
+            [InlineKeyboardButton("Спасибо, но нет", callback_data='dopDop_no')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
         date = anketa["osmotr_date"]
-        await update.effective_message.reply_text(f"Спасибо за ответ! Будем ждать Вас на осмотре {date}")
+
+        await update.effective_message.reply_text(resources.get_tests_answer_false_text, reply_markup= reply_markup)
+
+
+async def handle_dopDop_analizy(update, context):
+    query = update.callback_query
+    answer = query.data  # Получаем ответ, "yes" или "no"
+    context.user_data["dop_message_id"] = query.message.message_id
+
+    if answer == 'dopDop_yes':
+        await choose_tests(update, context)
+
+    elif answer == "dopDop_no":
+        await dialogs_db.set_dialog_state(update.effective_user.id,
+                                          resources.dialog_states_dict["new_state"])
+
+        anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
+        date = anketa["osmotr_date"]
+        await update.effective_message.reply_text(f"Спасибо за ответ! Вы так же можете выбрать подходящие исследования до проф осмотра и непосредственно перед ним, оплатить на месте менеджеру наличными или через банковский терминал.")
+        await update.effective_message.reply_text(f"Будем ждать Вас на осмотре {date}")
+
 
 # --- формируем клавиатуру ---
 def get_tests_keyboard(selected_tests: set):

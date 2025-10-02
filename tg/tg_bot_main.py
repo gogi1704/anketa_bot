@@ -69,7 +69,7 @@ async def main():
     print('Бот запущен...')
     await application.bot.set_my_commands([
         BotCommand("start", "Пуск"),
-        BotCommand("clear_all", "Очистить мои данные")
+        BotCommand("clear_all", "Очистить и перезапустить бот")
     ], scope=BotCommandScopeDefault())
 
     application.add_error_handler(error_handler)
@@ -80,6 +80,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(consent_button_handler, pattern="^consent_"))
     application.add_handler(CallbackQueryHandler(handle_toggle, pattern="^(toggle:|done)"))
     application.add_handler(CallbackQueryHandler(handle_dop_analizy, pattern="^dop_"))
+    application.add_handler(CallbackQueryHandler(handle_dopDop_analizy, pattern="^dopDop_"))
     application.add_handler(CallbackQueryHandler(handle_pay, pattern="^pay_"))
     application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind:"))
 

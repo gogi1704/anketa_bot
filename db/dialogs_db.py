@@ -243,7 +243,7 @@ async def sync_to_google_sheets():
         print("[✅] Данные из SQLite выгружены в Google Sheets")
 
 # ==== Периодическая синхронизация ====
-async def periodic_sync(interval: int = 180):
+async def periodic_sync(interval: int = 3600):
     while True:
         await asyncio.sleep(interval)
         try:
@@ -513,6 +513,20 @@ async def load_reminders_on_startup(application):
                         chat_id=user_id,
                         name=job_name
                     )
+
+async def cancel_reminders(user_id: int, application):
+    # 1. Удаляем из базы
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "DELETE FROM reminders WHERE user_id = ?",
+            (user_id,)
+        )
+        await db.commit()
+
+    # 2. Удаляем задачи из JobQueue
+    for job in application.job_queue.jobs():
+        if job.name and job.name.startswith(f"reminder_{user_id}_"):
+            job.schedule_removal()
 
 
 #______

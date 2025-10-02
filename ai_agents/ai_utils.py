@@ -68,13 +68,16 @@ def extract_recs(response_str: str):
             data = json.loads(response_str)
 
             risks: List[str] = data.get("risks", [])
-            risks_text = "\n".join(risks)
+            risks_text = "🔺" + "\n🔺".join(risks)
             recommendations: List[Dict[str, str]] = data.get("recommendations", [])
+            if len(recommendations) > 3:
+                recommendations = recommendations[:3]
 
             rec_text = ""
             for rec in recommendations:
+                rec_text += "✅"
                 rec_text += rec['reason']
-                rec_text += "-"
+                rec_text += ": "
                 rec_text += bold_html(rec['test'])
                 rec_text += "\n"
 
