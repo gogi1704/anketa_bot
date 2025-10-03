@@ -68,21 +68,21 @@ async def main():
 
     print('Бот запущен...')
     await application.bot.set_my_commands([
-        BotCommand("start", "Пуск"),
-        BotCommand("clear_all", "Очистить и перезапустить бот")
+        BotCommand("start", "Старт"),
+        BotCommand("clear_and_restart", "Очистить и перезапустить бот")
     ], scope=BotCommandScopeDefault())
 
     application.add_error_handler(error_handler)
 
     application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler("clear_all", clear_all))
+    application.add_handler(CommandHandler("clear_and_restart", clear_all))
     application.add_handler(CommandHandler("stop_privacy", stop_privacy))
     application.add_handler(CallbackQueryHandler(consent_button_handler, pattern="^consent_"))
     application.add_handler(CallbackQueryHandler(handle_toggle, pattern="^(toggle:|done)"))
     application.add_handler(CallbackQueryHandler(handle_dop_analizy, pattern="^dop_"))
     application.add_handler(CallbackQueryHandler(handle_dopDop_analizy, pattern="^dopDop_"))
     application.add_handler(CallbackQueryHandler(handle_pay, pattern="^pay_"))
-    application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind:"))
+    # application.add_handler(CallbackQueryHandler(handle_remind, pattern="^remind:"))
 
     # application.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
 

@@ -10,10 +10,12 @@ from tg import tg_manager_chat_handlers
 from tg import tg_bot_telegraph
 from telegram.ext import ContextTypes
 from utils.anketa_utils import *
+import tg_bot_reminder
 
 
 image_path = Path(__file__).parent.parent / "images" / "image_andrey.jpg"
 async def clear_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     user_id = update.effective_user.id
     await dialogs_db.delete_dialog(user_id)
     await dialogs_db.delete_user(user_id)
@@ -43,7 +45,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user is None:
         await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
         with open(image_path, "rb") as image:
-            await context.bot.send_photo(chat_id=chat_id, photo=image, caption=resources.start_text)
+            await context.bot.send_photo(chat_id=chat_id, photo=image, caption=resources.start_text,  reply_markup=ReplyKeyboardRemove())
 
         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_name"] )
     else:
@@ -71,6 +73,8 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, keyboard = question_alko()
     elif pos == 7:
         text, keyboard = question_physical()
+    elif pos == 8:
+        text, keyboard = question_hyperton()
     elif pos == 9:
         text, keyboard = question_dark_in_eyes()
     elif pos == 10:
@@ -256,6 +260,7 @@ async def anketa_dialog(update, context):
 
     result = await util_fins.validate_anketa_questions(position=pos, user_say=text, text= text, context= context, update= update)
     if result == "empty":
+        await update.message.reply_text("Для ответа выберите один вариантов, нажав на соответствующую кнопку!")
         return
 
     if result != "complete":
@@ -263,7 +268,7 @@ async def anketa_dialog(update, context):
         return
 
 
-    if pos not in (8, 12):
+    if pos != 12:
         context.user_data['answers'].append(text)
     context.user_data['position'] += 1
 
@@ -341,13 +346,16 @@ async def handle_pay(update, context):
     date_obj = datetime.strptime(date, "%d.%m.%Y")
 
     if answer == "pay_yes":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔔 Напомнить за день до визита", callback_data=f"remind:{date_obj.isoformat()}")]
-        ])
+        # keyboard = InlineKeyboardMarkup([
+        #     [InlineKeyboardButton("🔔 Напомнить за день до визита", callback_data=f"remind:{date_obj.isoformat()}")]
+        # ])
 
         await query.message.reply_text("Спасибо! Оплата прошла успешно.(прислать чек)Поздравляем, Вы полностью готовы к визиту!(когда подключим платежку)")
         await asyncio.sleep(2)
-        await query.message.reply_text(f"Ваша дата осмотра :{date}.\nПри себе необходимо иметь паспорт.Все вопросы Вы можете задать менеджеру лаборатории оп телефону ... \nХорошего дня и до встречи!",reply_markup=keyboard)
+        await query.message.reply_text(f"Ваша дата осмотра :{date}.\nПри себе необходимо иметь паспорт.Все вопросы Вы можете задать менеджеру лаборатории оп телефону ... \nХорошего дня и до встречи!")
+
+        context.user_data["remind_data"] = f"remind:{date_obj.isoformat()}"
+        await tg_bot_reminder.handle_remind(update, context)
 
         text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре (и уже оплатил){date}.\n\nОбследования: {chosen} "
         await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)

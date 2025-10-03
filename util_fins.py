@@ -75,6 +75,12 @@ async def validate_anketa_questions(position, user_say, text,update = None,conte
            return "complete"
        else:
            return "empty"
+    # ВОПРОС С КНОПКАМИ- Давление
+    elif position == 8:
+       if text in ["В норме", "Повышенное", "Не мониторю", "Ниже 120/80", BACK_BUTTON]:
+           return "complete"
+       else:
+           return "empty"
     # ВОПРОС С КНОПКАМИ - Потемнения в глазах
     elif position == 9:
         if text in ["Да", "Нет", BACK_BUTTON]:
@@ -95,16 +101,16 @@ async def validate_anketa_questions(position, user_say, text,update = None,conte
             return "empty"
 
     #Вопросы с нейро-проверкой
-    elif position == 8:
-        dialog = await dialogs_db.get_dialog(update.effective_user.id)
-        result = await question_hyperton(dialog, context)
-        if "complete" in result:
-            context.user_data['answers'].append(result)
-            await dialogs_db.delete_dialog(update.effective_user.id)
-            return "complete"
-        else:
-            await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{result}\n")
-            return result
+    # elif position == 8:
+    #     dialog = await dialogs_db.get_dialog(update.effective_user.id)
+    #     result = await question_hyperton(dialog, context)
+    #     if "complete" in result:
+    #         context.user_data['answers'].append(result)
+    #         await dialogs_db.delete_dialog(update.effective_user.id)
+    #         return "complete"
+    #     else:
+    #         await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{result}\n")
+    #         return result
 
     elif position == 12:
         dialog = await dialogs_db.get_dialog(update.effective_user.id)

@@ -116,6 +116,16 @@ def question_physical():
 
     return resources.QUESTIONS[7], keyboard
 
+def question_hyperton():
+    keyboard = [
+        ["В норме", "Не мониторю"],
+        ["Повышенное", "Ниже 120/80"],
+        [BACK_BUTTON]
+    ]
+    # reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    return resources.QUESTIONS[8], keyboard
+
 def question_dark_in_eyes():
     keyboard = [
         ["Да","Нет"],
@@ -144,10 +154,10 @@ def question_sustavi():
 
     return resources.QUESTIONS[11], keyboard
 
-async def question_hyperton(dialog, context):
-    user_prompt = prompts.user_prompt_check_hyperton_question.format(dialog=dialog)
-    agent_check = await open_ai_main.get_gpt_answer(system_prompt= prompts.system_prompt_check_hyperton_question, user_prompt=user_prompt, context= context)
-    return agent_check
+# async def question_hyperton(dialog, context):
+#     user_prompt = prompts.user_prompt_check_hyperton_question.format(dialog=dialog)
+#     agent_check = await open_ai_main.get_gpt_answer(system_prompt= prompts.system_prompt_check_hyperton_question, user_prompt=user_prompt, context= context)
+#     return agent_check
 
 async def question_hronic(dialog, context):
     user_prompt = prompts.user_prompt_check_hronic_question.format(dialog=dialog)
