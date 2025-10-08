@@ -10,7 +10,7 @@ from tg import tg_manager_chat_handlers
 from tg import tg_bot_telegraph
 from telegram.ext import ContextTypes
 from utils.anketa_utils import *
-import tg_bot_reminder
+from tg import tg_bot_reminder
 
 
 image_path = Path(__file__).parent.parent / "images" / "image_andrey.jpg"
@@ -287,13 +287,19 @@ async def anketa_dialog(update, context):
             anketa = "\n".join(
                 f"{i + 1}. {q} — {a}" for i, (q, a) in enumerate(zip(questions_small, anketa_answers))
             )
-            user = await dialogs_db.get_user(update.effective_user.id)
-            user_name = user["name"]
-            keyboard = [
+            # user = await dialogs_db.get_user(update.effective_user.id)
+            # user_name = user["name"]
+            keyboard_yes_no = [
                 [InlineKeyboardButton("Да", callback_data='dop_yes')],
                 [InlineKeyboardButton("Нет", callback_data='dop_no')]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            keyboard_tests_info = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Ознакомиться с комплексами",
+                                      url="https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10")]
+            ])
+
+            reply_markup = InlineKeyboardMarkup(keyboard_yes_no)
 
             #TУТ ЗАПРОС К НЕЙРОНКЕ НА ПОЛУЧЕНИЕ РЕКОМЕГДАЦИЙ
 
@@ -304,7 +310,7 @@ async def anketa_dialog(update, context):
             risks, recommendations_list, rec_text = ai_utils.extract_recs(recs)
 
             risk_text = f"Проанализировав ваши ответы, я выявил некоторые риски:\n{risks}\n\n"
-            recomendation_text = f"На основе этого анализа, я сформировал персональную рекомендацию.\nВам полезно пройти комплекс исследований:\n{rec_text}\n\nПрохождение этих исследований займет минимум времени, выгодно и о заботе здоровья..."
+            recomendation_text = f"На основе этого анализа, я сформировал ПЕРСОНАЛЬНУЮ РЕКОМЕНДАЦИЮ.\nВам полезно пройти комплекс исследований:\n{rec_text}\n\nДанные комплексы исследований дают Вам возможность позаботиться о своем здоровье за короткое время и по выгодным ценам."
 
             # user_prompt = prompts.user_prompt_rec_tests.format(anketa = f"Имя - {user_name}\n" + anketa)
             # rec_tests_json = await get_gpt_answer(system_prompt= prompts.system_prompt_rec_tests , context= context, user_prompt= user_prompt,model= "gpt-5-mini"  )
@@ -312,13 +318,12 @@ async def anketa_dialog(update, context):
 
             if len(recommendations_list) > 0:
                 await update.message.reply_text(risk_text, parse_mode="HTML")
-                await asyncio.sleep(2)
+                await asyncio.sleep(4)
                 await update.message.reply_text(recomendation_text, parse_mode="HTML")
-                await asyncio.sleep(2)
-                await update.message.reply_text(text="Также, вы можете выбрать абсолютно любой из представленных комплексов услуг (<a href='https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10'>ознакомиться можно тут</a>).",
-                                                parse_mode="HTML")
+                await asyncio.sleep(5)
+                await update.message.reply_text(text="Также, вы можете выбрать абсолютно любой из представленных комплексов услуг.Ознакомиться со всеми услугами можно по кнопке под этим сообщением!",reply_markup= keyboard_tests_info)
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(7)
                 await update.message.reply_text("Вы хотели бы сдать дополнительные анализы на осмотре?", reply_markup= reply_markup )
             else:
 

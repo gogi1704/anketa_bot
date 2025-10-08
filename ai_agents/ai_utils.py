@@ -2,6 +2,7 @@ import ast
 import json
 from typing import List, Dict
 import html
+import resources
 
 def filter_by_threat_level(data: dict, threshold: int = 6) -> dict:
     """
@@ -75,10 +76,11 @@ def extract_recs(response_str: str):
 
             rec_text = ""
             for rec in recommendations:
-                rec_text += "✅"
-                rec_text += rec['reason']
-                rec_text += ": "
+                rec_text += "✅ комплекс "
                 rec_text += bold_html(rec['test'])
+                rec_text += bold_html(f" {resources.TESTS_PRICE[rec['test']]}₽")
+                rec_text += " - "
+                rec_text += rec['reason']
                 rec_text += "\n"
 
             return bold_html(risks_text), recommendations, rec_text
