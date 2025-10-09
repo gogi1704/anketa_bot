@@ -17,7 +17,7 @@ async def get_list_and_price(list_tests,tests_price ):
     text = ""
     price = 0
     for test in list_tests:
-        text += f"{test} - {tests_price[test]}\n₽"
+        text += f"{test} - {tests_price[test]}₽\n"
         price += tests_price[test]
 
     return text, price

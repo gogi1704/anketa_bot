@@ -390,4 +390,5 @@ user_all_right_text = "Поздравляем! У вас отличное сос
 
 def get_final_text_tests_with_price(tests,price):
     part = "Вы сделали осознанный шаг к заботе о своем здоровье!\nВы выбрали:"
-    return f"{part}\n{ai_utils.bold_html(tests)}\n\n{ai_utils.bold_html(f"Сумма к оплате: {price}₽.")}\nОплатить можно безопасно прямо сейчас картой онлайн."
+    price_text = f"Сумма к оплате: {price}\u20BD."
+    return f"{part}\n{ai_utils.bold_html(tests)}\n\n{ai_utils.bold_html(price_text)}\nОплатить можно безопасно прямо сейчас картой онлайн."

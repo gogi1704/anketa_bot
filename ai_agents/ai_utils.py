@@ -77,8 +77,8 @@ def extract_recs(response_str: str):
             rec_text = ""
             for rec in recommendations:
                 rec_text += "✅ комплекс "
-                rec_text += bold_html(rec['test'])
-                rec_text += bold_html(f" {resources.TESTS_PRICE[rec['test']]}₽")
+                rec_text += f"'{bold_html(rec['test'])}"
+                rec_text += bold_html(f" {resources.TESTS_PRICE[rec['test']]}₽'")
                 rec_text += " - "
                 rec_text += rec['reason']
                 rec_text += "\n"

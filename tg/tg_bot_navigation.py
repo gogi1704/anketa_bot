@@ -371,6 +371,8 @@ async def handle_pay(update, context):
             f"Спасибо за прохождение анкетирования! Ваша анкета передана менеджеру.\nНа приеме скажите ему Ваш ID номер {update.effective_user.id}.\nЕсли у Вас возникнут вопросы по дополнительным обследованиям, Вы всегда можете проконсультироваться с нашим менеджером в день осмотра.\nБудем ждать Вас {date} на осмотре!")
         await dialogs_db.set_dialog_state(update.effective_user.id,resources.dialog_states_dict["new_state"])
 
+    elif answer == "pay_change":
+        await choose_tests(update, context)
 
 
 async def handle_dop_analizy(update, context):
@@ -508,7 +510,9 @@ async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             [InlineKeyboardButton("Оплатить", callback_data='pay_yes')],
-            [InlineKeyboardButton("Отмена", callback_data='pay_no')]
+            [InlineKeyboardButton("Изменить выбор", callback_data='pay_change')],
+            [InlineKeyboardButton("Передумал", callback_data='pay_no')]
+
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
