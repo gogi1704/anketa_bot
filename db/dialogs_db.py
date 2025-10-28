@@ -63,7 +63,7 @@ async def init_db():
             await db.execute("""
                         CREATE TABLE IF NOT EXISTS user_reply_state (
                             user_id INTEGER PRIMARY KEY,
-                            manager_message_id INTEGER
+                            manager_message_id TEXT
                         )
                     """)
 
@@ -169,7 +169,7 @@ async def sync_from_google_sheets():
             user_id, manager_message_id = r
             await db.execute(
                 "INSERT INTO user_reply_state (user_id, manager_message_id) VALUES (?, ?)",
-                (int(user_id), int(manager_message_id) if manager_message_id else None)
+                (int(user_id), manager_message_id if manager_message_id else None)
             )
 
         # dialog_states
@@ -544,7 +544,9 @@ async def get_user_id_by_group_message(group_msg_id: int):
         row = await cursor.fetchone()
         return row[0] if row else None
 
-async def save_user_reply_state(user_id: int, manager_msg_id: int):
+#______ #REPLY_STATE
+
+async def save_user_reply_state(user_id: int, manager_msg_id: str):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
             INSERT OR REPLACE INTO user_reply_state (user_id, manager_message_id)
