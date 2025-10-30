@@ -6,6 +6,7 @@ from tg.tg_bot_channel_funs import *
 from tg.tg_error_handlers import error_handler
 from tg.tg_bot_reminder import handle_remind
 from db import dialogs_db
+from ai_agents.open_ai_main import get_gpt_answer
 import nest_asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from telegram import BotCommand, BotCommandScopeDefault
@@ -34,7 +35,7 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
                                   is_medosomotr=user_data['is_medosomotr'],
                                   phone= user_data["phone"],
                                   register_date=user_data['register_date'],
-                                  privacy_policy = "согласие",
+                                  from_manager = "from_manager",
                                   privacy_policy_date = datetime.datetime.now(datetime.UTC),
                                   )
         # Записать в диалог
@@ -51,7 +52,7 @@ async def consent_button_handler(update: Update, context: ContextTypes.DEFAULT_T
                                   is_medosomotr=user_data['is_medosomotr'],
                                   phone= user_data["phone"],
                                   register_date=user_data['register_date'],
-                                  privacy_policy = "отказ",
+                                  from_manager = "from_manager",
                                   privacy_policy_date = datetime.datetime.now(datetime.UTC),
                                   )
 
@@ -65,6 +66,7 @@ async def main():
 
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
     application.post_init = load_reminders_on_startup
+    await get_gpt_answer("test", "test", context= application)
 
     print('Бот запущен...')
     await application.bot.set_my_commands([

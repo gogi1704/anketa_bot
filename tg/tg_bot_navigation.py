@@ -34,7 +34,7 @@ async def stop_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
                               is_medosomotr=user_data['is_medosomotr'],
                               phone="empty",
                               register_date=user_data['register_date'],
-                              privacy_policy="отказ",
+                              from_manager="отказ",
                               privacy_policy_date=None,
                               )
     await update.message.reply_text("Разрешения отозваны.")
@@ -44,7 +44,14 @@ BACK_BUTTON = "⬅️ Назад"
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = await dialogs_db.get_user(update.effective_user.id)
+    args = context.args
+
     if user is None:
+        print(args)
+        if args:
+            ref_code = args[0]  # например "manager1"
+            await dialogs_db.add_user(user_id=update.effective_user.id, name="", from_manager= ref_code)
+
         await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
         await dialogs_db.save_user_reply_state(update.effective_user.id, manager_msg_id= resources.STATES_USERS_FINALS['start'])
         with open(image_path, "rb") as image:
@@ -153,12 +160,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    user = await dialogs_db.get_user(update.effective_user.id)
     text = update.message.text
     user_id = update.effective_user.id
     name = util_fins.normalize_name(text)
 
 
-    await dialogs_db.add_user(user_id=user_id, name=name)
+
+    await dialogs_db.add_user(user_id=user_id, name=name, from_manager= user["from_manager"])
     await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["anketa"])
     answer = resources.second_text.format(user_name=name, user_id=user_id)
 
@@ -511,10 +520,14 @@ async def handle_toggle(update, context: ContextTypes.DEFAULT_TYPE):
                                   name=user_data['name'],
                                   is_medosomotr=user_data['is_medosomotr'],
                                   register_date=user_data['register_date'],
-                                  privacy_policy = user_data['privacy_policy'],
+                                  from_manager = user_data['from_manager'],
                                   privacy_policy_date = user_data['privacy_policy_date'],
                                   get_dop_tests = chosen
                                   )
+
+        text_to_manager = f"Пользователь: {user_data['name']} (ID- {update.effective_user.id}).\nПланирует пройти дополнительные обследования на осмотре.\n\nОбследования: {chosen} "
+        await tg_manager_chat_handlers.send_to_chat(update, context, text_to_manager)
+
         if "dop_message_id" in context.user_data:
             try:
                 await context.bot.delete_message(
@@ -731,7 +744,7 @@ async def get_number_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                   is_medosomotr=user_data['is_medosomotr'],
                                   phone= number,
                                   register_date=user_data['register_date'],
-                                  privacy_policy = user_data['privacy_policy'],
+                                  from_manager = user_data['from_manager'],
                                   privacy_policy_date = user_data['privacy_policy_date']
                                   )
         anketa = await dialogs_db.get_anketa(update.effective_user.id)

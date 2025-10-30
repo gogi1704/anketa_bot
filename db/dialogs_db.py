@@ -27,7 +27,7 @@ async def init_db():
                     is_medosomotr TEXT,
                     phone TEXT,
                     register_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    privacy_policy TEXT,
+                    from_manager TEXT,
                     privacy_policy_date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     get_dop_tests TEXT
                 )
@@ -84,6 +84,13 @@ async def init_db():
                 )
             """)
 
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    key TEXT PRIMARY KEY,
+                    is_active BOOLEAN DEFAULT 1
+                )
+            """)
+
             await db.commit()
         await sync_from_google_sheets()
 
@@ -106,6 +113,7 @@ def get_sheet():
         "user_reply_state": sheet.worksheet("user_reply_state"),
         "dialog_states": sheet.worksheet("dialog_states"),
         "reminders": sheet.worksheet("reminders"),
+        "api_keys": sheet.worksheet("api_keys")
     }
 
 # ==== Загрузка данных из Google Sheets в SQLite ====
@@ -120,6 +128,7 @@ async def sync_from_google_sheets():
         await db.execute("DELETE FROM user_reply_state")
         await db.execute("DELETE FROM dialog_states")
         await db.execute("DELETE FROM reminders")
+        await db.execute("DELETE FROM api_keys")
         # patient_dialogs
         rows = sheets["patient_dialogs"].get_all_values()[1:]
         for r in rows:
@@ -132,10 +141,10 @@ async def sync_from_google_sheets():
         # user_data
         rows = sheets["user_data"].get_all_values()[1:]
         for r in rows:
-            user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests = r
+            user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests = r
             await db.execute(
-                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (int(user_id), name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests)
+                "INSERT INTO user_data (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (int(user_id), name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests)
             )
 
         # user_anketa
@@ -190,6 +199,15 @@ async def sync_from_google_sheets():
                 (int(user_id), visit_date, reminder_time)
             )
 
+        # api_keys
+        api_keys = sheets["api_keys"].get_all_values()[1:]  # пропустить заголовок
+        for row in api_keys:
+            key, is_active = row
+            await db.execute(
+                "INSERT OR IGNORE INTO api_keys (key, is_active) VALUES (?, ?)",
+                (key.strip(), is_active.strip() == "TRUE")
+            )
+
         await db.commit()
         print("[✅] Данные из Google Sheets загружены в SQLite")
 
@@ -205,10 +223,10 @@ async def sync_to_google_sheets():
         sheets["patient_dialogs"].update("A1", [["telegram_id", "dialog_text", "updated_at"]] + rows)
 
         # user_data
-        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests FROM user_data") as cur:
+        async with db.execute("SELECT user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests FROM user_data") as cur:
             rows = await cur.fetchall()
         sheets["user_data"].clear()
-        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "privacy_policy", "privacy_policy_date", "get_dop_tests"]] + rows)
+        sheets["user_data"].update("A1", [["user_id", "name", "is_medosomotr", "phone", "register_date", "from_manager", "privacy_policy_date", "get_dop_tests"]] + rows)
 
         # user_anketa
         async with db.execute("""SELECT user_id, organization_or_inn, osmotr_date, age, weight, height, smoking, alcohol, physical_activity, hypertension, darkening_of_the_eyes, sugar, joint_pain, chronic_diseases FROM user_anketa""") as cur:
@@ -239,6 +257,19 @@ async def sync_to_google_sheets():
             rows = await cur.fetchall()
         sheets["reminders"].clear()
         sheets["reminders"].update("A1", [["user_id", "visit_date", "reminder_time"]] + rows)
+
+        # api_keys
+        try:
+            async with db.execute("SELECT * FROM api_keys") as cursor:
+                keys = await cursor.fetchall()
+            header = ["key", "is_active"]
+            data = [[row[0], "TRUE" if row[1] else "FALSE"] for row in keys]
+            sheet = sheets["api_keys"]
+            sheet.clear()
+            sheet.update('A1', [header] + data)
+            print("[✅] api_keys обновлены")
+        except Exception as e:
+            print(f"[❌] Ошибка api_keys: {e}")
 
         print("[✅] Данные из SQLite выгружены в Google Sheets")
 
@@ -301,18 +332,18 @@ async def delete_dialog( telegram_id: int):
 #______ USERS
 async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None,
                    register_date = datetime.datetime.now(datetime.UTC),
-                   privacy_policy:str = None, privacy_policy_date:datetime.datetime = None, get_dop_tests:str = None):
+                   from_manager:str = None, privacy_policy_date:datetime.datetime = None, get_dop_tests:str = None):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
-            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests)
+            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests ))
+        """, (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests ))
         await db.commit()
 
 async def get_user(user_id: int) -> dict | None:
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT user_id, name, is_medosomotr, phone, register_date, privacy_policy, privacy_policy_date, get_dop_tests FROM user_data WHERE user_id = ?",
+            "SELECT user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests FROM user_data WHERE user_id = ?",
             (user_id,)
         )
         row = await cursor.fetchone()
@@ -323,7 +354,7 @@ async def get_user(user_id: int) -> dict | None:
                 "is_medosomotr": row[2],
                 "phone": row[3],
                 "register_date": row[4],
-                "privacy_policy":row[5],
+                "from_manager":row[5],
                 "privacy_policy_date":row[6],
                 "get_dop_tests":row[7]
             }
@@ -564,4 +595,21 @@ async def delete_user_reply_state(user_id: int):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("DELETE FROM user_reply_state WHERE user_id = ?", (user_id,))
         await db.commit()
+
+#______ #API_KEYS
+async def get_active_keys() -> list[str]:
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute("SELECT key FROM api_keys WHERE is_active=1") as cursor:
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
+
+async def deactivate_key(api_key: str):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("UPDATE api_keys SET is_active = 0 WHERE key=?", (api_key,))
+        await db.commit()
+    try:
+        await sync_to_google_sheets()
+    except Exception as e:
+        print(f"Не удалось синхронизировать ключи: {e}")
+
 
