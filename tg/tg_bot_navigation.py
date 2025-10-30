@@ -48,9 +48,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user is None:
         print(args)
-        if args:
-            ref_code = args[0]  # например "manager1"
-            await dialogs_db.add_user(user_id=update.effective_user.id, name="", from_manager= ref_code)
+        if args and len(args) > 0:
+            ref_code = args[0]
+        else:
+            ref_code = "base_url"
+        await dialogs_db.add_user(
+            user_id=update.effective_user.id,
+            name="",
+            from_manager=ref_code  # ⚡️ добавлено безопасно
+        )
 
         await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Терапевт сказал:{resources.start_text}\n")
         await dialogs_db.save_user_reply_state(update.effective_user.id, manager_msg_id= resources.STATES_USERS_FINALS['start'])
@@ -60,7 +66,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["get_name"] )
     else:
         anketa = await dialogs_db.get_anketa(user_id=update.effective_user.id)
-        await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user['name']}! Ожидаем вас на осмотре {anketa['osmotr_date']}!")
+        if anketa is None:
+            await context.bot.send_message(chat_id=chat_id, text="Анкета не найдена. Для прохождения анкеты введите команду : /clear_and_restart")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=f"Здравствуйте {user['name']}! Ожидаем вас на осмотре {anketa['osmotr_date']}!")
 
 async def start_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['answers'] = []
@@ -165,7 +174,7 @@ async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = util_fins.normalize_name(text)
 
-
+    print(user)
 
     await dialogs_db.add_user(user_id=user_id, name=name, from_manager= user["from_manager"])
     await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["anketa"])
