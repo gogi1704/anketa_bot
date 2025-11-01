@@ -319,7 +319,8 @@ async def anketa_dialog(update, context):
 
             keyboard_tests_info = InlineKeyboardMarkup([
                 [InlineKeyboardButton("Ознакомиться с комплексами",
-                                      url="https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10")]
+                                      url=f"https://telegra.ph/CHek-apy-po-laboratorii-OOO-CHelovek-09-10?ver={int(datetime.now().timestamp())}"
+                                      )]
             ])
 
             reply_markup = InlineKeyboardMarkup(keyboard_yes_no)
