@@ -1,7 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.constants import ChatAction
-
-import resources
 from ai_agents.open_ai_main import get_gpt_answer
 from ai_agents import ai_utils
 from db import dialogs_db
@@ -116,20 +114,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await dialogs_db.append_answer(telegram_id=update.effective_user.id, text=f"Пациент сказал:{text}\n")
     state = await dialogs_db.get_dialog_state(update.effective_user.id)
 
-    # manager_msg_id = await dialogs_db.get_user_reply_state(update.effective_user.id)
-    # if manager_msg_id is not None:
-    #     print(type(manager_msg_id), manager_msg_id)
-    #     # Получили ответ → очищаем состояние
-    #     await dialogs_db.delete_user_reply_state(update.effective_user.id)
-    #
-    #     # Отправляем сообщение в группу
-    #     await tg_manager_chat_handlers.send_to_chat(
-    #         update, context,
-    #         message_text=f"📨 Пользователь:\n\n{update.message.text}\n\n\n#Диалог_с_{update.effective_user.id}"
-    #     )
-    #
-    #     await update.message.reply_text("✅ Ваш ответ отправлен менеджеру.")
-    #     return
+    manager_msg_id = await dialogs_db.get_user_answer_state(update.effective_user.id)
+    if manager_msg_id is not None:
+        # Получили ответ → очищаем состояние
+        await dialogs_db.delete_user_answer_state(update.effective_user.id)
+
+        # Отправляем сообщение в группу
+        await tg_manager_chat_handlers.send_to_chat(
+            update, context,
+            message_text=f"📨 Пользователь ответил:\n\n{update.message.text}\n\n\n#Диалог_с_{update.effective_user.id}"
+        )
+
+        await update.message.reply_text("✅ Ваш ответ отправлен менеджеру.")
+        return
 
     if state == resources.dialog_states_dict["anketa"]:
         await anketa_dialog(update, context)
@@ -176,7 +173,7 @@ async def name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print(user)
 
-    await dialogs_db.add_user(user_id=user_id, name=name, from_manager= user["from_manager"])
+    await dialogs_db.add_user(user_id=user_id, name=name, from_manager= user["from_manager"],register_date=user['register_date'],)
     await dialogs_db.set_dialog_state(update.effective_user.id, resources.dialog_states_dict["anketa"])
     answer = resources.second_text.format(user_name=name, user_id=user_id)
 

@@ -1,10 +1,9 @@
-import os
 from dotenv import load_dotenv
 from tg.tg_bot_navigation import *
+from tg.tg_bot_util_handlers import update_db
 from tg.tg_manager_chat_handlers import *
 from tg.tg_bot_channel_funs import *
 from tg.tg_error_handlers import error_handler
-from tg.tg_bot_reminder import handle_remind
 from db import dialogs_db
 from ai_agents.open_ai_main import get_gpt_answer
 import nest_asyncio
@@ -77,6 +76,7 @@ async def main():
     application.add_error_handler(error_handler)
 
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('update_db', update_db))
     application.add_handler(CommandHandler("clear_and_restart", clear_all))
     application.add_handler(CommandHandler("stop_privacy", stop_privacy))
     application.add_handler(CallbackQueryHandler(consent_button_handler, pattern="^consent_"))

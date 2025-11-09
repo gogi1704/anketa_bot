@@ -68,6 +68,13 @@ async def init_db():
                     """)
 
             await db.execute("""
+                        CREATE TABLE IF NOT EXISTS user_answer_state (
+                            user_id INTEGER PRIMARY KEY,
+                            manager_message_id TEXT
+                        )
+                    """)
+
+            await db.execute("""
                 CREATE TABLE IF NOT EXISTS dialog_states (
                     user_id INTEGER PRIMARY KEY,
                     dialog_state TEXT NOT NULL
@@ -111,6 +118,7 @@ def get_sheet():
         "user_anketa": sheet.worksheet("user_anketa"),
         "message_links": sheet.worksheet("message_links"),
         "user_reply_state": sheet.worksheet("user_reply_state"),
+        "user_answer_state": sheet.worksheet("user_answer_state"),
         "dialog_states": sheet.worksheet("dialog_states"),
         "reminders": sheet.worksheet("reminders"),
         "api_keys": sheet.worksheet("api_keys")
@@ -126,6 +134,7 @@ async def sync_from_google_sheets():
         await db.execute("DELETE FROM user_anketa")
         await db.execute("DELETE FROM message_links")
         await db.execute("DELETE FROM user_reply_state")
+        await db.execute("DELETE FROM user_answer_state")
         await db.execute("DELETE FROM dialog_states")
         await db.execute("DELETE FROM reminders")
         await db.execute("DELETE FROM api_keys")
@@ -170,6 +179,15 @@ async def sync_from_google_sheets():
             await db.execute(
                 "INSERT INTO message_links (group_message_id, user_id) VALUES (?, ?)",
                 (int(group_message_id), int(user_id))
+            )
+
+        # user_answer_state
+        rows = sheets["user_answer_state"].get_all_values()[1:]
+        for r in rows:
+            user_id, manager_message_id = r
+            await db.execute(
+                "INSERT INTO user_answer_state (user_id, manager_message_id) VALUES (?, ?)",
+                (int(user_id), manager_message_id if manager_message_id else None)
             )
 
         # user_reply_state
@@ -245,6 +263,12 @@ async def sync_to_google_sheets():
             rows = await cur.fetchall()
         sheets["user_reply_state"].clear()
         sheets["user_reply_state"].update("A1", [["user_id", "manager_message_id"]] + rows)
+
+        # user_answer_state
+        async with db.execute("SELECT user_id, manager_message_id FROM user_answer_state") as cur:
+            rows = await cur.fetchall()
+        sheets["user_answer_state"].clear()
+        sheets["user_answer_state"].update("A1", [["user_id", "manager_message_id"]] + rows)
 
         # dialog_states
         async with db.execute("SELECT user_id, dialog_state FROM dialog_states") as cur:
@@ -330,14 +354,35 @@ async def delete_dialog( telegram_id: int):
 
 
 #______ USERS
-async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None,
-                   register_date = datetime.datetime.now(datetime.UTC),
-                   from_manager:str = None, privacy_policy_date:datetime.datetime = None, get_dop_tests:str = None):
+# async def add_user(user_id: int, name: str, is_medosomotr:str = None, phone: str = None,
+#                    register_date = datetime.datetime.now(datetime.UTC),
+#                    from_manager:str = None, privacy_policy_date:datetime.datetime = None, get_dop_tests:str = None):
+#     async with aiosqlite.connect(db_path) as db:
+#         await db.execute("""
+#             INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests)
+#             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+#         """, (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests ))
+#         await db.commit()
+
+async def add_user(
+    user_id: int,
+    name: str,
+    is_medosomotr: str = None,
+    phone: str = None,
+    register_date: datetime.datetime | None = None,
+    from_manager: str = None,
+    privacy_policy_date: datetime.datetime | None = None,
+    get_dop_tests: str = None
+):
+    if register_date is None:
+        register_date = datetime.datetime.now(datetime.UTC)
+
     async with aiosqlite.connect(db_path) as db:
         await db.execute("""
-            INSERT OR REPLACE INTO user_data (user_id, name,is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests)
+            INSERT OR REPLACE INTO user_data 
+            (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests ))
+        """, (user_id, name, is_medosomotr, phone, register_date, from_manager, privacy_policy_date, get_dop_tests))
         await db.commit()
 
 async def get_user(user_id: int) -> dict | None:
@@ -575,7 +620,7 @@ async def get_user_id_by_group_message(group_msg_id: int):
         row = await cursor.fetchone()
         return row[0] if row else None
 
-#______ #REPLY_STATE
+#______ #SALE_STATE
 
 async def save_user_reply_state(user_id: int, manager_msg_id: str):
     async with aiosqlite.connect(db_path) as db:
@@ -595,6 +640,27 @@ async def delete_user_reply_state(user_id: int):
     async with aiosqlite.connect(db_path) as db:
         await db.execute("DELETE FROM user_reply_state WHERE user_id = ?", (user_id,))
         await db.commit()
+
+#______ #ANSWER_STATE
+async def save_user_answer_state(user_id: int, manager_msg_id: int):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO user_answer_state (user_id, manager_message_id)
+            VALUES (?, ?)
+        """, (user_id, manager_msg_id))
+        await db.commit()
+
+async def get_user_answer_state(user_id: int):
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute("SELECT manager_message_id FROM user_answer_state WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def delete_user_answer_state(user_id: int):
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute("DELETE FROM user_answer_state WHERE user_id = ?", (user_id,))
+        await db.commit()
+
 
 #______ #API_KEYS
 async def get_active_keys() -> list[str]:
