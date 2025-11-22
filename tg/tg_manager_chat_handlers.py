@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes
 import resources
 from db.dialogs_db import *
 
@@ -16,9 +16,10 @@ async def handle_reply_button_pressed(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     _, manager_msg_id = query.data.split("|")
+    manager_msg_id = int(manager_msg_id)
     user_id = query.from_user.id
 
-    # Удаляем inline-кнопку (не обязательно, но аккуратнее)
+    # Удаляем inline-кнопку (красиво)
     try:
         await context.bot.edit_message_reply_markup(
             chat_id=query.message.chat.id,
@@ -26,20 +27,27 @@ async def handle_reply_button_pressed(update: Update, context: ContextTypes.DEFA
             reply_markup=None
         )
     except Exception as e:
-        print(f"⚠️ Не удалось удалить кнопку: {e}")
+        print(f"⚠ Не удалось удалить кнопку: {e}")
 
-    # Сохраняем в БД, что пользователь отвечает менеджеру
-    await save_user_answer_state(user_id, int(manager_msg_id))
+    # Если пользователь нажал "Написать менеджеру"
+    if manager_msg_id == 0:
+        await save_user_answer_state(user_id, 0)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✍️ Напишите ваш вопрос менеджеру одним сообщением."
+        )
+        return REPLY_TO_MANAGER
 
-    # Отправляем пользователю запрос на сообщение
-    msg = await context.bot.send_message(
+    # Если это реальный ответ на сообщение менеджера
+    await save_user_answer_state(user_id, manager_msg_id)
+
+    await context.bot.send_message(
         chat_id=user_id,
         text="✍️ Введите ваш ответ менеджеру:"
     )
 
-
-    # Явно запускаем ConversationHandler
     return REPLY_TO_MANAGER
+
 
 async def handle_manager_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("handle_manager_reply")

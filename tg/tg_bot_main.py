@@ -69,8 +69,8 @@ async def main():
 
     print('Бот запущен...')
     await application.bot.set_my_commands([
-        BotCommand("start", "Старт"),
-        BotCommand("clear_and_restart", "Очистить и перезапустить бот")
+        BotCommand("start", "Старт")
+        # BotCommand("clear_and_restart", "Очистить и перезапустить бот")
     ], scope=BotCommandScopeDefault())
 
     application.add_error_handler(error_handler)
